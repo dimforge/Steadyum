@@ -1,0 +1,2 @@
+The `blender-icons.ttf` icons is a font created (using icomoon.io with baseline-height = 20%) from the Blender SVG icon set created by Henry Wilkinson: https://github.com/Shrinks99/blender-icons commit 39ff8a433929a1a2bd79d7be77509458bff40061
+The original icons are distributed under the CC BY-SA 4.0 license.

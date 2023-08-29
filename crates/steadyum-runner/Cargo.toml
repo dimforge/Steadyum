@@ -1,0 +1,28 @@
+[package]
+name = "steadyum-runner"
+version = "0.1.0"
+edition = "2021"
+
+
+[features]
+default = [ ]
+dim3 = [ "rapier3d", "steadyum-api-types/dim3" ]
+dim2 = [ "rapier2d", "steadyum-api-types/dim2" ]
+
+[dependencies]
+amiquip = "0.4"
+anyhow = "1"
+rapier3d = { version = "0.17", optional = true, features = [ "profiler" ] }
+rapier2d = { version = "0.17", optional = true, features = [ "profiler" ] }
+clap     = { version = "4", features = [ "derive" ] }
+serde_json = "1"
+flume = "0.10"
+uuid = { version = "1", featurers = [ "serde" ] }
+axum = { version = "0.6", features = [ "json" ] }
+smol = "1"
+tokio = "1"
+zenoh = "0.7.2-rc"
+env_logger = "0.10"
+log = "0.4.19"
+
+steadyum-api-types = { path = "../steadyum-api-types", features = [ "zenoh" ] }

@@ -1,0 +1,94 @@
+[package]
+name = "steadyum"
+version = "0.1.0"
+authors = ["Sébastien Crozet <developer@crozet.re>"]
+description = "3-dimensional physics sandbox."
+documentation = "http://docs.rs/steadyum3d"
+homepage = "http://rapier.rs"
+repository = "https://github.com/dimforge/steadyum"
+readme = "README.md"
+keywords = [ "physics", "dynamics", "rigid", "real-time", "joints" ]
+license = "Apache-2.0"
+edition = "2021"
+
+[workspace]
+members = [ "crates/steadyum-runner", "crates/steadyum-partitionner", "crates/steadyum-api-types" ]
+resolver = "2"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "steadyum"
+
+[features]
+default = [ ]
+dim3 = [ "rapier3d", "bevy_rapier3d", "steadyum-api-types/dim3" ]
+dim2 = [ "rapier2d", "bevy_rapier2d", "steadyum-api-types/dim2" ]
+parallel = [ "bevy_rapier2d?/parallel", "bevy_rapier3d?/parallel" ]
+simd-stable = [ "bevy_rapier2d?/simd-stable", "bevy_rapier3d?/simd-stable" ]
+wasm-bindgen = [ "bevy_rapier2d?/wasm-bindgen", "bevy_rapier3d?/wasm-bindgen" ]
+simd-nightly = [ "bevy_rapier2d?/simd-nightly", "bevy_rapier3d?/simd-nightly" ]
+serde-serialize = [ "bevy_rapier2d?/serde-serialize", "bevy_rapier3d?/serde-serialize" ]
+enhanced-determinism = [ "bevy_rapier2d?/enhanced-determinism", "bevy_rapier3d?/enhanced-determinism" ]
+voxels = [ "dot_vox" ]
+
+[dependencies]
+nalgebra = { version = "0.32", features = [ "convert-glam020" ] }
+# Don't enable the default features because we don't need the ColliderSet/RigidBodySet
+rapier3d = { version = "0.17", optional = true, features = [ "profiler" ] }
+bevy_rapier3d = { version = "0.20", optional = true, features = [ "serde-serialize" ] }
+rapier2d = { version = "0.17", optional = true, features = [ "profiler" ] }
+bevy_rapier2d = { version = "0.20", optional = true, features = [ "serde-serialize" ] }
+
+bitflags = "1"
+strum = "0.24"
+strum_macros = "0.24"
+image = "0.24"
+winit = "0.27"
+log = "0.4"
+oorandom = "11"
+bytemuck = "1"
+serde = "1"
+bincode = "1"
+serde_json = "1"
+noise = "0.8"
+sled = "0.34"
+clap = { version = "4", features = [ "derive" ] }
+flume = "0.10"
+anyhow = "1"
+dashmap = "5"
+uuid = "1"
+reqwest = { version = "0.11", features = [ "blocking" ] }
+dot_vox = { version = "5", optional = true }
+instant = "0.1"
+
+bevy = { version  = "0.9", features = [ "serialize" ] }
+bevy_egui = "0.17"
+bevy_stl = "0.7"
+bevy_obj = "0.9"
+bevy_polyline = "0.4"
+bevy_prototype_lyon = "0.7"
+bevy_infinite_grid = "0.6"
+
+steadyum-api-types = { path = "./crates/steadyum-api-types" }
+
+# Not compatible with WASM
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+native-dialog = "0.6" # For opening mesh files.
+zenoh = "0.7.2-rc" # For comunication with the distributed engine.
+steadyum-api-types = { path = "./crates/steadyum-api-types", features = [ "zenoh" ] }
+
+[profile.release]
+debug = true
+
+
+[patch.crates-io]
+#nalgebra = { git = "https://github.com/dimforge/nalgebra", branch = "additional-glam-conversion"}
+
+#nalgebra = { path = "../nalgebra" }
+#parry2d = { path = "../parry/crates/parry2d" }
+#parry3d = { path = "../parry/crates/parry3d" }
+#rapier2d = { path = "../rapier/crates/rapier2d" }
+#rapier3d = { path = "../rapier/crates/rapier3d" }
+bevy_rapier2d = { path = "../bevy_rapier/bevy_rapier2d" }
+bevy_rapier3d = { path = "../bevy_rapier/bevy_rapier3d" }
+

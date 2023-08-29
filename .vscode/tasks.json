@@ -1,0 +1,182 @@
+{
+	// See https://go.microsoft.com/fwlink/?LinkId=733558
+	// for the documentation about the tasks.json format
+	"version": "2.0.0",
+	"options": {
+		"env": {
+			"RUST_BACKTRACE": "1"
+		}
+	},
+	"tasks": [
+		{
+			"label": "🚀 run 3d",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--release",
+				"--features",
+				"dim3"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 run 3d − 💌 deterministic",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--release",
+				"--features",
+				"dim3,enhanced-determinism"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 run 3d − 🌈 simd",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--release",
+				"--features",
+				"dim3,simd-stable"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 run 3d − 🌈 simd 🪢 parallel",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--release",
+				"--features",
+				"dim3,simd-stable,parallel"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 run 2d",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--release",
+				"--features",
+				"dim2"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 run 2d − 🌈 simd",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--release",
+				"--features",
+				"dim2,simd-stable"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🚀 run 2d − 🌈 simd 🪢 parallel",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--release",
+				"--features",
+				"dim2,simd-stable,parallel"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🪲 debug 3d",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--features",
+				"dim3"
+				"--",
+				"--pause"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🪲 debug 3d − 🌈 simd",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--features",
+				"dim3,simd-stable"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		},
+		{
+			"label": "🪲 debug 3d − 🌈 simd 🪢 parallel",
+			"type": "shell",
+			"command": "cargo",
+			"args": [
+				"run",
+				"--bin",
+				"steadyum",
+				"--features",
+				"dim3,simd-stable,parallel"
+			],
+			"group": "build",
+			"presentation": {
+				"clear": true
+			}
+		}
+	]
+]
+}
