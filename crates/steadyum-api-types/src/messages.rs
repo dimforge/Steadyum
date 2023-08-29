@@ -1,4 +1,4 @@
-use crate::objects::WarmBodyObject;
+use crate::objects::{ColdBodyObject, WarmBodyObject};
 use crate::simulation::SimulationBounds;
 use rapier::dynamics::GenericJoint;
 use rapier::geometry::Aabb;
@@ -20,6 +20,13 @@ pub struct ImpulseJointAssignment {
     pub body1: Uuid,
     pub body2: Uuid,
     pub joint: GenericJoint,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct BodyAssignment {
+    pub uuid: Uuid,
+    pub warm: WarmBodyObject,
+    pub cold: ColdBodyObject, // TODO: don’t send the cold object?
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -73,13 +80,16 @@ pub enum PartitionnerMessage {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum RunnerMessage {
-    ReAssignObject {
-        uuid: Uuid,
-        warm_object: WarmBodyObject,
+    AssignRegion {
+        region: SimulationBounds,
+        time_origin: u64,
     },
-    AssignJoint(ImpulseJointAssignment),
+    AssignIsland {
+        bodies: Vec<BodyAssignment>,
+        impulse_joints: Vec<ImpulseJointAssignment>,
+    },
     MoveObject {
         uuid: Uuid,
         position: Isometry<Real>,

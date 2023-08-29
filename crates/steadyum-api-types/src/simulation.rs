@@ -4,10 +4,25 @@ use rapier::na::vector;
 use std::cmp::Ordering;
 use std::process::Command;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg(feature = "dim2")]
+pub type SimulationBoundsU8 = [u8; 32];
+
+#[cfg(feature = "dim3")]
+pub type SimulationBoundsU8 = [u8; 48];
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SimulationBounds {
     pub mins: [i64; DIM],
     pub maxs: [i64; DIM],
+}
+
+impl SimulationBounds {
+    pub fn smallest() -> Self {
+        Self {
+            mins: [i64::MIN; DIM],
+            maxs: [i64::MIN; DIM],
+        }
+    }
 }
 
 impl Default for SimulationBounds {
@@ -97,6 +112,10 @@ impl SimulationBounds {
         }
 
         result
+    }
+
+    pub fn as_bytes(&self) -> SimulationBoundsU8 {
+        bytemuck::cast([self.mins, self.maxs])
     }
 
     pub fn aabb(&self) -> Aabb {

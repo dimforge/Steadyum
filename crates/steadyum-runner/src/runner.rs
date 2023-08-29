@@ -5,7 +5,8 @@ use crate::region_assignment::{
     apply_and_send_region_assignments, calculate_region_assignments, RegionAssignments,
 };
 use crate::watch::{
-    compute_watch_data, read_watched_objects, set_watched_set, MAIN_GROUP, WATCH_GROUP,
+    compute_watch_data, read_watched_objects, set_watched_sets, WatchedObject, MAIN_GROUP,
+    WATCH_GROUP,
 };
 use flume::Receiver;
 use rapier::data::Coarena;
@@ -15,17 +16,21 @@ use std::collections::HashMap;
 use std::time::Duration;
 use steadyum_api_types::kinematic::KinematicAnimations;
 use steadyum_api_types::kvs::KvsContext;
-use steadyum_api_types::messages::{ImpulseJointAssignment, PartitionnerMessage};
+use steadyum_api_types::messages::{ImpulseJointAssignment, PartitionnerMessage, RunnerMessage};
 use steadyum_api_types::objects::{
     BodyPositionObject, ColdBodyObject, WarmBodyObject, WarmBodyObjectSet, WatchedObjects,
 };
+use steadyum_api_types::region_db::DbContext;
 use steadyum_api_types::simulation::SimulationBounds;
-use steadyum_api_types::zenoh::{put_json, ZenohContext};
+use steadyum_api_types::zenoh::{put_json, runner_zenoh_commands_key, ZenohContext};
 use uuid::Uuid;
+use zenoh::prelude::sync::SyncResolve;
+use zenoh::prelude::SplitBuffer;
 
 #[derive(Default)]
 pub struct SimulationState {
     pub step_id: u64,
+    pub is_running: bool,
     pub query_pipeline: QueryPipeline,
     pub bodies: RigidBodySet,
     pub colliders: ColliderSet,
@@ -38,9 +43,11 @@ pub struct SimulationState {
     pub multibody_joints: MultibodyJointSet,
     pub ccd_solver: CCDSolver,
     pub physics_pipeline: PhysicsPipeline,
+    pub body2animations: Coarena<KinematicAnimations>,
     pub body2uuid: HashMap<RigidBodyHandle, Uuid>,
     pub uuid2body: HashMap<Uuid, RigidBodyHandle>,
     pub sim_bounds: SimulationBounds,
+    pub watched_objects: HashMap<RigidBodyHandle, WatchedObject>,
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -53,50 +60,67 @@ struct MainLoopTimings {
     pub ack: f32,
 }
 
-pub enum RunnerCommand {
-    AssignJoint(ImpulseJointAssignment),
-    CreateBody {
-        uuid: Uuid,
-        cold_object: ColdBodyObject,
-        warm_object: WarmBodyObject,
-    },
-    MoveBody {
-        uuid: Uuid,
-        position: Isometry<Real>,
-    },
-    UpdateColdObject {
-        uuid: Uuid,
-    },
-    StartStop {
-        running: bool,
-    },
-    RunSteps {
-        curr_step: u64,
-        num_steps: u32,
-    },
-}
-
-pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyhow::Result<()> {
-    let sim_bounds = args.simulation_bounds();
-
-    let runner_key = sim_bounds.runner_key();
+pub fn run_simulation(args: CliArgs) -> anyhow::Result<()> {
     let mut kvs = KvsContext::new().expect("B");
+    let my_uuid = Uuid::new_v4();
+    let mut db = DbContext::new()?;
 
     let zenoh = ZenohContext::new().expect("Runner error 1");
     let neighbors = Neighbors::new(&zenoh);
     let mut sim_state = SimulationState::default();
     sim_state.gravity = Vector::y() * (-9.81);
 
-    let mut body2animations = Coarena::<KinematicAnimations>::new();
-    let runner_zenoh_key = args.simulation_bounds().zenoh_queue_key();
-    let mut is_running = false;
-    let mut watched_objects = HashMap::new();
+    let runner_zenoh_key = runner_zenoh_commands_key(my_uuid);
+    let runner_zenoh_commands_queue = zenoh
+        .session
+        .declare_subscriber(&runner_zenoh_key)
+        .res_sync()
+        .expect("Commands error.");
+
+    // We started listening to the command queue, we can now register this runner as
+    // ready to be assigned.
+    db.put_new_runner(my_uuid)?;
 
     let mut watch_iteration_id = 0;
     let mut steps_to_run = 0;
     let stopped = false;
     sim_state.step_id = args.time_origin;
 
+    /*
+     * Wait for region assignment (blocking).
+     */
+    let mut delayed_messages = vec![]; // Messages that we received before we got assigned a region.
+
+    while let Ok(sample) = runner_zenoh_commands_queue.recv() {
+        let payload = sample.value.payload.contiguous();
+        let body = String::from_utf8_lossy(&payload);
+        let message: RunnerMessage = serde_json::from_str(&body).unwrap();
+
+        match message {
+            RunnerMessage::AssignRegion {
+                region,
+                time_origin,
+            } => {
+                sim_state.sim_bounds = region;
+                sim_state.step_id = time_origin;
+                break;
+            }
+            _ => delayed_messages.push(message),
+        }
+    }
+
+    /*
+     * Processe delayed messages.
+     */
+
+    // If we reach this point, we got a region assigned.
+    for message in delayed_messages {
+        process_message(&mut sim_state, message);
+    }
+
+    /*
+     * Main runner loop.
+     */
     while !stopped {
         let mut timings = MainLoopTimings::default();
         let loop_time = std::time::Instant::now();
@@ -104,123 +128,13 @@ pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyho
 
         let t0 = std::time::Instant::now();
 
-        while let Ok(command) = commands.try_recv() {
-            match command {
-                RunnerCommand::RunSteps {
-                    curr_step,
-                    num_steps,
-                } => {
-                    sim_state.step_id = curr_step;
-                    steps_to_run = num_steps;
-
-                    // Read the latest watched sets.
-                    let watched = read_watched_objects(&mut kvs, sim_bounds);
-                    set_watched_set(
-                        watched,
-                        &mut watched_objects,
-                        &mut sim_state,
-                        watch_iteration_id,
-                    );
-
-                    // All messages received after the RunStep have to be processed at the next step
-                    // to avoid, e.g., double integration of the same body.
-                    break;
-                }
-                RunnerCommand::AssignJoint(joint_assignment) => {
-                    if let (Some(handle1), Some(handle2)) = (
-                        sim_state.uuid2body.get(&joint_assignment.body1),
-                        sim_state.uuid2body.get(&joint_assignment.body2),
-                    ) {
-                        sim_state.impulse_joints.insert(
-                            *handle1,
-                            *handle2,
-                            joint_assignment.joint,
-                            true,
-                        );
-                    }
-                }
-                RunnerCommand::CreateBody {
-                    uuid,
-                    cold_object,
-                    warm_object,
-                } => {
-                    if let Some(handle) = sim_state.uuid2body.get(&uuid) {
-                        sim_state.bodies.remove(
-                            *handle,
-                            &mut sim_state.islands,
-                            &mut sim_state.colliders,
-                            &mut sim_state.impulse_joints,
-                            &mut sim_state.multibody_joints,
-                            true,
-                        );
-                        watched_objects.remove(handle);
-                    }
-
-                    let (body, collider) = make_builders(&cold_object, warm_object);
-                    let watch_shape_radius =
-                        collider.shape.compute_local_bounding_sphere().radius * 1.1;
-                    let body_handle = sim_state.bodies.insert(body);
-                    sim_state.colliders.insert_with_parent(
-                        collider,
-                        body_handle,
-                        &mut sim_state.bodies,
-                    );
-                    let watch_collider = ColliderBuilder::ball(watch_shape_radius)
-                        .density(0.0)
-                        .collision_groups(InteractionGroups::new(
-                            // We don’t care about watched objects intersecting each others.
-                            WATCH_GROUP,
-                            MAIN_GROUP,
-                        ))
-                        // Watched objects don’t generate forces.
-                        .solver_groups(InteractionGroups::none());
-                    sim_state.colliders.insert_with_parent(
-                        watch_collider,
-                        body_handle,
-                        &mut sim_state.bodies,
-                    );
-                    sim_state.body2uuid.insert(body_handle, uuid.clone());
-                    sim_state.uuid2body.insert(uuid, body_handle);
-                    body2animations.insert(body_handle.0, cold_object.animations);
-                }
-                RunnerCommand::MoveBody { .. } => {
-                    /*
-                    if let Some(handle) = sim_state.uuid2body.get(&uuid) {
-                        if let Some(rb) = sim_state.bodies.get_mut(*handle) {
-                            rb.set_position(position, true);
-                        }
-                    }
-                     */
-                }
-                RunnerCommand::UpdateColdObject { .. } => {
-                    /*
-                    if let Ok(cold_object) = kvs.get_cold_object(uuid) {
-                        if let Some(handle) = sim_state.uuid2body.get(&uuid) {
-                            if let Some(rb) = sim_state.bodies.get_mut(*handle) {
-                                if cold_object.body_type == RigidBodyType::Fixed
-                                    && rb.body_type() == RigidBodyType::Dynamic
-                                {
-                                    let co = &sim_state.colliders[rb.colliders()[0]];
-                                    // Broadcast the body to all the regions it intersects.
-                                    let message = PartitionnerMessage::ReAssignObject {
-                                        uuid,
-                                        origin: runner_key.clone(),
-                                        aabb: co.compute_aabb(),
-                                        warm_object: WarmBodyObject::from_body(rb, step_id),
-                                        dynamic: false,
-                                    };
-                                    put_json(&partitionner, &message);
-                                }
-
-                                rb.set_body_type(cold_object.body_type, true);
-                            }
-                        }
-                    }
-                     */
-                }
-                RunnerCommand::StartStop { running } => is_running = running,
-            }
+        while let Ok(sample) = runner_zenoh_commands_queue.try_recv() {
+            let payload = sample.value.payload.contiguous();
+            let body = String::from_utf8_lossy(&payload);
+            let message: RunnerMessage = serde_json::from_str(&body).unwrap();
+            process_message(&mut sim_state, message)?;
         }
+
         timings.message_processing = t0.elapsed().as_secs_f32();
 
         if steps_to_run == 0 {
@@ -230,7 +144,7 @@ pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyho
         let mut num_steps_run = 0;
         let mut region_assignments = RegionAssignments::default();
 
-        if is_running {
+        if sim_state.is_running {
             let t0 = std::time::Instant::now();
 
             while steps_to_run > 0 {
@@ -256,7 +170,7 @@ pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyho
                 let current_physics_time = sim_state.step_id as Real * sim_state.params.dt;
 
                 // Update animations.
-                for (handle, animations) in body2animations.iter() {
+                for (handle, animations) in sim_state.body2animations.iter() {
                     if animations.linear.is_none() && animations.angular.is_none() {
                         // Nothing to animate.
                         continue;
@@ -276,8 +190,7 @@ pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyho
 
             let t0 = std::time::Instant::now();
             let connected_components = calculate_connected_components(&sim_state);
-            region_assignments =
-                calculate_region_assignments(&sim_state, connected_components, &watched_objects);
+            region_assignments = calculate_region_assignments(&sim_state, connected_components);
             timings.connected_components = t0.elapsed().as_secs_f32();
         } else {
             steps_to_run = 0;
@@ -287,7 +200,7 @@ pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyho
         let mut all_data = vec![];
 
         for (handle, body) in sim_state.bodies.iter() {
-            if !watched_objects.contains_key(&handle) {
+            if !sim_state.watched_objects.contains_key(&handle) {
                 let warm_object = WarmBodyObject::from_body(body, sim_state.step_id);
                 let uuid = sim_state.body2uuid[&handle].clone();
 
@@ -300,7 +213,7 @@ pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyho
             }
         }
 
-        let mut watch_data = compute_watch_data(&sim_state, &watched_objects, num_steps_run);
+        let mut watch_data = compute_watch_data(&sim_state, num_steps_run);
 
         timings.data_and_watch_list = t0.elapsed().as_secs_f32();
 
@@ -315,9 +228,10 @@ pub fn run_simulation(args: CliArgs, commands: Receiver<RunnerCommand>) -> anyho
                 timestamp: sim_state.step_id,
                 objects: all_data,
             };
-            kvs.put_warm(&runner_key, &warm_set).expect("C");
+            kvs.put_warm(&sim_state.sim_bounds.runner_key(), &warm_set)
+                .expect("C");
             kvs.put(
-                &sim_bounds.watch_kvs_key(),
+                &sim_state.sim_bounds.watch_kvs_key(),
                 &WatchedObjects {
                     objects: watch_data,
                 },
@@ -362,4 +276,130 @@ fn make_builders(
         .can_sleep(false);
     let collider = ColliderBuilder::new(cold_object.shape.clone());
     (body, collider)
+}
+
+fn process_message(sim_state: &mut SimulationState, message: RunnerMessage) -> anyhow::Result<()> {
+    match message {
+        RunnerMessage::AssignRegion {
+            region,
+            time_origin,
+        } => {
+            sim_state.sim_bounds = region;
+            sim_state.step_id = time_origin;
+        }
+        RunnerMessage::RunSteps {
+            curr_step,
+            num_steps,
+        } => {
+            todo!();
+            /*
+            sim_state.step_id = curr_step;
+            steps_to_run = num_steps;
+
+            // Read the latest watched sets.
+            let watched = read_watched_objects(&mut kvs, sim_bounds);
+            set_watched_sets(watched, &mut watched_objects, sim_state, watch_iteration_id);
+
+            // All messages received after the RunStep have to be processed at the next step
+            // to avoid, e.g., double integration of the same body.
+            break;
+             */
+        }
+        RunnerMessage::AssignIsland {
+            bodies,
+            impulse_joints,
+        } => {
+            for data in bodies {
+                if let Some(handle) = sim_state.uuid2body.get(&data.uuid) {
+                    sim_state.bodies.remove(
+                        *handle,
+                        &mut sim_state.islands,
+                        &mut sim_state.colliders,
+                        &mut sim_state.impulse_joints,
+                        &mut sim_state.multibody_joints,
+                        true,
+                    );
+                    sim_state.watched_objects.remove(handle);
+                }
+
+                let (body, collider) = make_builders(&data.cold, data.warm);
+                let watch_shape_radius =
+                    collider.shape.compute_local_bounding_sphere().radius * 1.1;
+                let body_handle = sim_state.bodies.insert(body);
+                sim_state.colliders.insert_with_parent(
+                    collider,
+                    body_handle,
+                    &mut sim_state.bodies,
+                );
+                let watch_collider = ColliderBuilder::ball(watch_shape_radius)
+                    .density(0.0)
+                    .collision_groups(InteractionGroups::new(
+                        // We don’t care about watched objects intersecting each others.
+                        WATCH_GROUP,
+                        MAIN_GROUP,
+                    ))
+                    // Watched objects don’t generate forces.
+                    .solver_groups(InteractionGroups::none());
+                sim_state.colliders.insert_with_parent(
+                    watch_collider,
+                    body_handle,
+                    &mut sim_state.bodies,
+                );
+                sim_state.body2uuid.insert(body_handle, data.uuid.clone());
+                sim_state.uuid2body.insert(data.uuid, body_handle);
+                sim_state
+                    .body2animations
+                    .insert(body_handle.0, data.cold.animations);
+            }
+
+            for data in impulse_joints {
+                if let (Some(handle1), Some(handle2)) = (
+                    sim_state.uuid2body.get(&data.body1),
+                    sim_state.uuid2body.get(&data.body2),
+                ) {
+                    sim_state
+                        .impulse_joints
+                        .insert(*handle1, *handle2, data.joint, true);
+                }
+            }
+        }
+        RunnerMessage::MoveObject { .. } => {
+            /*
+            if let Some(handle) = sim_state.uuid2body.get(&uuid) {
+                if let Some(rb) = sim_state.bodies.get_mut(*handle) {
+                    rb.set_position(position, true);
+                }
+            }
+             */
+        }
+        RunnerMessage::UpdateColdObject { .. } => {
+            /*
+            if let Ok(cold_object) = kvs.get_cold_object(uuid) {
+                if let Some(handle) = sim_state.uuid2body.get(&uuid) {
+                    if let Some(rb) = sim_state.bodies.get_mut(*handle) {
+                        if cold_object.body_type == RigidBodyType::Fixed
+                            && rb.body_type() == RigidBodyType::Dynamic
+                        {
+                            let co = &sim_state.colliders[rb.colliders()[0]];
+                            // Broadcast the body to all the regions it intersects.
+                            let message = PartitionnerMessage::ReAssignObject {
+                                uuid,
+                                origin: runner_key.clone(),
+                                aabb: co.compute_aabb(),
+                                warm_object: WarmBodyObject::from_body(rb, step_id),
+                                dynamic: false,
+                            };
+                            put_json(&partitionner, &message);
+                        }
+
+                        rb.set_body_type(cold_object.body_type, true);
+                    }
+                }
+            }
+             */
+        }
+        RunnerMessage::StartStop { running } => sim_state.is_running = running,
+    }
+
+    Ok(())
 }

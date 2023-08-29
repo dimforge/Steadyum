@@ -24,7 +24,7 @@ impl WatchedObject {
     }
 }
 
-pub fn set_watched_set(
+pub fn set_watched_sets(
     watched: Vec<(WatchedObjects, SimulationBounds)>,
     watched_objects: &mut HashMap<RigidBodyHandle, WatchedObject>,
     sim_state: &mut SimulationState,
@@ -112,17 +112,18 @@ pub fn read_watched_objects(
 
 pub fn compute_watch_data(
     sim_state: &SimulationState,
-    watched_objects: &HashMap<RigidBodyHandle, WatchedObject>,
     num_steps_run: usize,
 ) -> Vec<(Uuid, BoundingSphere)> {
     let mut watch_data = vec![];
 
     for (handle, body) in sim_state.bodies.iter() {
-        if !watched_objects.contains_key(&handle) {
+        if !sim_state.watched_objects.contains_key(&handle) {
             let uuid = sim_state.body2uuid[&handle].clone();
             let predicted_pos = body.predict_position_using_velocity_and_forces(
                 sim_state.params.dt * num_steps_run as f32,
             );
+
+            // TODO: only register objects crossing the boundary as objects to watch.
             let aabb = sim_state.colliders[body.colliders()[0]].compute_swept_aabb(&predicted_pos);
             let sphere = BoundingSphere::new(aabb.center(), aabb.half_extents().norm() * 1.1);
             watch_data.push((uuid, sphere));

@@ -1,4 +1,5 @@
 use serde::Serialize;
+use uuid::Uuid;
 use zenoh::prelude::sync::Config;
 use zenoh::prelude::sync::SyncResolve;
 use zenoh::publication::Publisher;
@@ -26,4 +27,8 @@ pub fn put_json(publisher: &Publisher, elt: &impl Serialize) -> anyhow::Result<(
     let data = serde_json::to_string(elt)?;
     publisher.put(data.as_bytes()).res_sync().expect("F");
     Ok(())
+}
+
+pub fn runner_zenoh_commands_key(uuid: Uuid) -> String {
+    format!("runner/{}", uuid.to_string())
 }
