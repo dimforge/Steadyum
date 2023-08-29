@@ -10,5 +10,6 @@ pub mod objects;
 pub mod queries;
 pub mod simulation;
 
+mod region_db;
 #[cfg(feature = "zenoh")]
 pub mod zenoh;

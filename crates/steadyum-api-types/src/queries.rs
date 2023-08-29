@@ -1,5 +1,4 @@
 use rapier::geometry::Ray;
-use rapier::math::{Point, Real, Vector};
 use uuid::Uuid;
 
 #[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]

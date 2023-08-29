@@ -1,9 +1,8 @@
-use crate::kinematic::KinematicCurve;
 use crate::objects::WarmBodyObject;
 use crate::simulation::SimulationBounds;
-use rapier::dynamics::{GenericJoint, RigidBodyType};
+use rapier::dynamics::GenericJoint;
 use rapier::geometry::Aabb;
-use rapier::math::{Isometry, Point, Real, Vector};
+use rapier::math::{Isometry, Real};
 use uuid::Uuid;
 
 pub const PARTITIONNER_QUEUE: &str = "partitionner";

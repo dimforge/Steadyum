@@ -1,11 +1,9 @@
 use crate::runner::RunnerCommand;
-use amiquip::{Connection, ConsumerMessage, ConsumerOptions, QueueDeclareOptions};
 use flume::Sender;
 use steadyum_api_types::zenoh::ZenohContext;
 
 use steadyum_api_types::kvs::KvsContext;
 use steadyum_api_types::messages::{PartitionnerMessage, RunnerMessage, PARTITIONNER_QUEUE};
-use steadyum_api_types::objects::{ColdBodyObject, WarmBodyObject};
 use steadyum_api_types::simulation::SimulationBounds;
 use zenoh::prelude::sync::SyncResolve;
 use zenoh::prelude::SplitBuffer;
@@ -33,7 +31,7 @@ pub fn start_command_loop(
     zenoh.put_json(
         PARTITIONNER_QUEUE,
         &PartitionnerMessage::AckStart { origin: runner_key },
-    );
+    )?;
 
     while let Ok(sample) = queue.recv() {
         let payload = sample.value.payload.contiguous();
@@ -42,7 +40,7 @@ pub fn start_command_loop(
         let message: RunnerMessage = serde_json::from_str(&body).unwrap();
         match message {
             RunnerMessage::AssignJoint(joint) => {
-                commands_snd.send(RunnerCommand::AssignJoint(joint));
+                commands_snd.send(RunnerCommand::AssignJoint(joint))?;
             }
             RunnerMessage::ReAssignObject { uuid, warm_object } => {
                 let cold_object = kvs.get_cold_object(uuid).expect("E");
@@ -50,16 +48,16 @@ pub fn start_command_loop(
                     uuid,
                     cold_object,
                     warm_object,
-                });
+                })?;
             }
             RunnerMessage::MoveObject { uuid, position } => {
-                commands_snd.send(RunnerCommand::MoveBody { uuid, position });
+                commands_snd.send(RunnerCommand::MoveBody { uuid, position })?;
             }
             RunnerMessage::UpdateColdObject { uuid } => {
-                commands_snd.send(RunnerCommand::UpdateColdObject { uuid });
+                commands_snd.send(RunnerCommand::UpdateColdObject { uuid })?;
             }
             RunnerMessage::StartStop { running } => {
-                commands_snd.send(RunnerCommand::StartStop { running });
+                commands_snd.send(RunnerCommand::StartStop { running })?;
             }
             RunnerMessage::RunSteps {
                 curr_step,
@@ -68,7 +66,7 @@ pub fn start_command_loop(
                 commands_snd.send(RunnerCommand::RunSteps {
                     curr_step,
                     num_steps,
-                });
+                })?;
             }
         }
     }

@@ -1,6 +1,5 @@
-use rapier::math::{AngVector, Isometry, Point, Real, Rotation, Vector};
+use rapier::math::{AngVector, Isometry, Real, Rotation, Vector};
 use std::ops::{Add, Mul};
-use std::process::Output;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct KinematicCurve<T> {

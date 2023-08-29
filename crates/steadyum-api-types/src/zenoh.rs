@@ -1,10 +1,7 @@
-use crate::messages::{PartitionnerMessage, PARTITIONNER_QUEUE};
 use serde::Serialize;
-use std::sync::Mutex;
 use zenoh::prelude::sync::Config;
 use zenoh::prelude::sync::SyncResolve;
 use zenoh::publication::Publisher;
-use zenoh::scouting::WhatAmI;
 use zenoh::Session;
 
 pub struct ZenohContext {
@@ -13,7 +10,7 @@ pub struct ZenohContext {
 
 impl ZenohContext {
     pub fn new() -> anyhow::Result<Self> {
-        let mut config = Config::default();
+        let config = Config::default();
         // config.set_mode(Some(WhatAmI::Client));
         let session = zenoh::open(config).res_sync().unwrap();
         Ok(Self { session })

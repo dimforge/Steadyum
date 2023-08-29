@@ -15,7 +15,7 @@ pub struct KvsContext {
 impl KvsContext {
     pub fn new() -> anyhow::Result<Self> {
         let client = redis::Client::open("redis://127.0.0.1/")?;
-        let mut connection = client.get_connection()?;
+        let connection = client.get_connection()?;
 
         Ok(Self { client, connection })
     }
