@@ -9,7 +9,7 @@ pub fn handle_drag_hover(mut commands: Commands) {}
 
 #[cfg(feature = "dim3")]
 pub fn handle_drag_hover(
-    mut drag_state: ResMut<DragState>,
+    drag_state: ResMut<DragState>,
     scene_mouse: Res<SceneMouse>,
     mut transforms: Query<&mut Transform>,
 ) {

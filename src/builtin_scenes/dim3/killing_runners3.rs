@@ -2,14 +2,13 @@ use crate::builtin_scenes::BuiltinScene;
 use bevy_rapier::prelude::RapierContext;
 use bevy_rapier3d::rapier::prelude::*;
 use std::collections::HashMap;
-use steadyum_api_types::kinematic::{KinematicAnimations, KinematicCurve};
 
 pub fn init_world() -> BuiltinScene {
     /*
      * World
      */
     let mut result = RapierContext::default();
-    let mut animations = HashMap::default();
+    let animations = HashMap::default();
 
     /*
      * Ground

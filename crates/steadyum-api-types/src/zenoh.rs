@@ -1,10 +1,9 @@
-use crate::messages::{PartitionnerMessage, PARTITIONNER_QUEUE};
+use crate::simulation::SimulationBounds;
 use serde::Serialize;
-use std::sync::Mutex;
+use uuid::Uuid;
 use zenoh::prelude::sync::Config;
 use zenoh::prelude::sync::SyncResolve;
 use zenoh::publication::Publisher;
-use zenoh::scouting::WhatAmI;
 use zenoh::Session;
 
 pub struct ZenohContext {
@@ -13,7 +12,7 @@ pub struct ZenohContext {
 
 impl ZenohContext {
     pub fn new() -> anyhow::Result<Self> {
-        let mut config = Config::default();
+        let config = Config::default();
         // config.set_mode(Some(WhatAmI::Client));
         let session = zenoh::open(config).res_sync().unwrap();
         Ok(Self { session })
@@ -29,4 +28,12 @@ pub fn put_json(publisher: &Publisher, elt: &impl Serialize) -> anyhow::Result<(
     let data = serde_json::to_string(elt)?;
     publisher.put(data.as_bytes()).res_sync().expect("F");
     Ok(())
+}
+
+pub fn runner_zenoh_commands_key(uuid: Uuid) -> String {
+    format!("runner/{}", uuid.to_string())
+}
+
+pub fn runner_zenoh_ack_key(region: &SimulationBounds) -> String {
+    format!("ack/{}", region.to_string())
 }

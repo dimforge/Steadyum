@@ -450,7 +450,7 @@ fn selection_inspector(
 
             ui.separator();
             egui::Grid::new("Character controller props").show(ui, |ui| {
-                let mut character_length_val =
+                let character_length_val =
                     |ui: &mut egui::Ui, label: &str, value: &mut CharacterLength| {
                         match value {
                             CharacterLength::Absolute(val) => {

@@ -1,9 +1,7 @@
-use crate::kinematic::{KinematicAnimations, KinematicCurve};
-use rapier::geometry::Aabb;
-use rapier::math::{AngVector, Isometry, Point, Real, Vector};
+use crate::kinematic::KinematicAnimations;
+use rapier::math::{AngVector, Isometry, Real, Vector};
 use rapier::parry::bounding_volume::BoundingSphere;
 use rapier::prelude::{Collider, ColliderShape, RigidBody, RigidBodyType};
-use std::time::Instant;
 use uuid::Uuid;
 
 #[derive(Copy, Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -62,6 +60,7 @@ pub struct WatchedObjects {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct RegionList {
+    // TODO: replace by the uuid?
     pub keys: Vec<String>,
     pub ports: Vec<u32>,
 }

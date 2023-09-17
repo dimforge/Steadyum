@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::render_resource::PrimitiveTopology};
+use bevy::prelude::*;
 use bevy_infinite_grid::*;
 
 pub struct FloorPlugin;
@@ -13,8 +13,8 @@ impl Plugin for FloorPlugin {
     }
 }
 
-fn setup_floor(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
-    commands.spawn_bundle(InfiniteGridBundle {
+fn setup_floor(mut commands: Commands, _meshes: ResMut<Assets<Mesh>>) {
+    commands.spawn(InfiniteGridBundle {
         grid: InfiniteGrid {
             shadow_color: None,
             fadeout_distance: 500.0,

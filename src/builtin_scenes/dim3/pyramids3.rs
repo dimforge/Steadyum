@@ -12,7 +12,6 @@ fn create_wall(
     half_extents: Vector<f32>,
 ) {
     let shift = half_extents * 2.0;
-    let mut k = 0;
     for i in 0usize..stack_height {
         for j in i..stack_height {
             let fj = j as f32;
@@ -28,7 +27,6 @@ fn create_wall(
             let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z);
             // let collider = ColliderBuilder::ball(half_extents.y);
             colliders.insert_with_parent(collider, handle, bodies);
-            k += 1;
         }
     }
 }
@@ -53,13 +51,13 @@ pub fn init_world() -> BuiltinScene {
     ]);
     let ground_handle = result.bodies.insert(rigid_body);
     let n = 10;
-    let heights = DMatrix::from_fn(n, n, |i, j| {
-        if i == 0 || i == n - 1 || j == 0 || j == n - 1 {
-            2.0
-        } else {
-            (i as f32).sin() + (j as f32).sin()
-        }
-    });
+    // let heights = DMatrix::from_fn(n, n, |i, j| {
+    //     if i == 0 || i == n - 1 || j == 0 || j == n - 1 {
+    //         2.0
+    //     } else {
+    //         (i as f32).sin() + (j as f32).sin()
+    //     }
+    // });
     // let collider = ColliderBuilder::heightfield(
     //     heights,
     //     vector![ground_size * 2.0, ground_height, ground_size * 2.0],

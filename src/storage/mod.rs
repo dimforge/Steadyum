@@ -10,5 +10,3 @@ mod db;
 mod plugin;
 #[cfg(not(target_arch = "wasm32"))]
 mod systems;
-#[cfg(not(target_arch = "wasm32"))]
-mod zenoh;

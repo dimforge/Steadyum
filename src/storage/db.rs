@@ -1,24 +1,18 @@
 use crate::parry::bounding_volume::Aabb;
-use crate::parry::math::Point;
 use crate::rapier::data::Coarena;
 use crate::rapier::dynamics::RigidBodyHandle;
-use bevy::prelude::{Entity, Resource};
+use bevy::prelude::Resource;
 use bevy::utils::Uuid;
-use bevy_rapier::math::{Real, Vect};
-use bevy_rapier::parry::math::Isometry;
+use bevy_rapier::math::Vect;
 use dashmap::{DashMap, DashSet};
-use na::Isometry3;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Instant;
 use steadyum_api_types::kvs::KvsContext;
-use steadyum_api_types::messages::{
-    ImpulseJointAssignment, ObjectAssignment, PartitionnerMessage, PARTITIONNER_QUEUE,
-};
+use steadyum_api_types::messages::{BodyAssignment, ImpulseJointAssignment};
 use steadyum_api_types::objects::{BodyPositionObject, ColdBodyObject, RegionList, WarmBodyObject};
+use steadyum_api_types::region_db::PartitionnerServer;
 use steadyum_api_types::simulation::SimulationBounds;
-use steadyum_api_types::zenoh::{put_json, ZenohContext};
-use zenoh::prelude::sync::SyncResolve;
+use steadyum_api_types::zenoh::ZenohContext;
 
 pub struct NewObjectCommand {
     pub uuid: Uuid,
@@ -36,25 +30,6 @@ pub enum DbCommand {
 pub struct LatestRigidBodyData {
     pub region: usize,
     pub data: BodyPositionObject,
-}
-
-impl LatestRigidBodyData {
-    pub fn interpolate_position(
-        &self,
-        prev_timestamp: u64,
-        curr_timestamp: u64,
-        prev_position: &Isometry<Real>,
-    ) -> Isometry<Real> {
-        if curr_timestamp >= self.data.timestamp {
-            self.data.position
-        } else {
-            prev_position.lerp_slerp(
-                &self.data.position,
-                (self.data.timestamp - curr_timestamp) as Real
-                    / (self.data.timestamp - prev_timestamp) as Real,
-            )
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -90,6 +65,7 @@ pub struct DbContext {
     pub rb2uuid: HashMap<RigidBodyHandle, Uuid>,
     pub region_list: Arc<RwLock<RegionList>>,
     pub new_objects_rcv: flume::Receiver<NewObjectData>,
+    pub partitionner: Arc<PartitionnerServer>,
     pub is_running: bool,
 }
 
@@ -101,72 +77,41 @@ pub fn spawn_db_thread() -> DbContext {
     let camera = Arc::new(RwLock::new(CameraPos::default()));
     let uuid2rb = Arc::new(DashMap::new());
     let region_list = Arc::new(RwLock::new(RegionList::default()));
+    let partitionner = Arc::new(PartitionnerServer::new().unwrap());
 
     {
         let uuid2rb = uuid2rb.clone();
+        let partitionner = partitionner.clone();
+
         std::thread::spawn(move || {
-            /*
-             * Init S3
-             */
-            let mut kvs = KvsContext::new().unwrap();
-
-            /*
-             * Init AMQP
-             */
-            let zenoh = ZenohContext::new().unwrap();
-            let partitionner = zenoh
-                .session
-                .declare_publisher(PARTITIONNER_QUEUE)
-                .res_sync()
-                .unwrap();
-
             /*
              * Command loop.
              */
             while let Ok(command) = commands_rcv.recv() {
                 match command {
-                    DbCommand::NewJoints { joints } => {
-                        put_json(
-                            &partitionner,
-                            &PartitionnerMessage::AssignMulipleImpulseJoints { joints },
-                        )
-                        .unwrap();
+                    DbCommand::NewJoints { .. } => {
+                        todo!()
+                        // put_json(
+                        //     &partitionner,
+                        //     &PartitionnerMessage::AssignMulipleImpulseJoints { joints },
+                        // )
+                        // .unwrap();
                     }
                     DbCommand::NewObjects { objects } => {
                         for objects in objects.chunks(256) {
-                            // Send object to S3.
-                            let cold_objects: Vec<_> = objects
+                            let bodies_to_insert: Vec<_> = objects
                                 .iter()
                                 .inspect(|obj| {
                                     uuid2rb.insert(obj.uuid, obj.handle);
                                 })
-                                .map(|obj| (obj.uuid.clone(), obj.cold_object.clone()))
-                                .collect();
-
-                            // Notify the partitionner.
-                            let messages: Vec<_> = objects
-                                .iter()
-                                .map(|obj| {
-                                    let aabb = obj
-                                        .cold_object
-                                        .shape
-                                        .compute_aabb(&obj.warm_object.position);
-                                    let dynamic = obj.cold_object.body_type.is_dynamic();
-                                    ObjectAssignment {
-                                        uuid: obj.uuid.clone(),
-                                        aabb,
-                                        warm_object: obj.warm_object,
-                                        dynamic,
-                                    }
+                                .map(|obj| BodyAssignment {
+                                    uuid: obj.uuid,
+                                    cold: obj.cold_object.clone(),
+                                    warm: obj.warm_object.clone(),
                                 })
                                 .collect();
-
-                            kvs.put_multiple_cold_objects(&cold_objects);
-                            put_json(
-                                &partitionner,
-                                &PartitionnerMessage::AssignMultipleObjects { objects: messages },
-                            )
-                            .unwrap();
+                            dbg!("Sending objects query to the partitionner!");
+                            partitionner.insert_objects(bodies_to_insert).unwrap();
                         }
                     }
                 }
@@ -180,6 +125,7 @@ pub fn spawn_db_thread() -> DbContext {
         let uuid2rb = uuid2rb.clone();
         let latest_data = latest_data.clone();
         let region_list = region_list.clone();
+        let partitionner = partitionner.clone();
 
         // let camera = camera.clone();
         std::thread::spawn(move || {
@@ -195,10 +141,7 @@ pub fn spawn_db_thread() -> DbContext {
              * Position reading loop.
              */
             loop {
-                let t0 = std::time::Instant::now();
-
-                let new_region_list: RegionList =
-                    kvs.get_with_str_key("region_list").unwrap_or_default();
+                let new_region_list: RegionList = partitionner.list_regions().unwrap_or_default();
                 let all_keys = &new_region_list.keys;
                 let all_ids = all_keys.iter().map(|key| {
                     *region_ids.entry(key.clone()).or_insert_with(|| {
@@ -207,8 +150,6 @@ pub fn spawn_db_thread() -> DbContext {
                     })
                 });
 
-                let mut min_timestamp = u64::MAX;
-                let mut min_timestamp_region = 0;
                 let mut timestamps = vec![];
 
                 if let Ok(all_data) = kvs.get_multiple_warm(&all_keys) {
@@ -282,6 +223,7 @@ pub fn spawn_db_thread() -> DbContext {
         new_objects_rcv,
         camera,
         region_list,
+        partitionner,
         is_running: false,
     }
 }

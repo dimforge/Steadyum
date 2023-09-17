@@ -1,13 +1,69 @@
+use crate::array_ser;
 use rapier::geometry::Aabb;
 use rapier::math::{Point, Real, DIM};
 use rapier::na::vector;
 use std::cmp::Ordering;
 use std::process::Command;
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg(feature = "dim2")]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Zeroable,
+    bytemuck::Pod,
+)]
+#[repr(transparent)]
+pub struct SimulationBoundsU8 {
+    #[serde(with = "array_ser")]
+    bytes: [u8; 32],
+}
+
+#[cfg(feature = "dim3")]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Zeroable,
+    bytemuck::Pod,
+)]
+#[repr(transparent)]
+pub struct SimulationBoundsU8 {
+    #[serde(with = "array_ser")]
+    bytes: [u8; 48],
+}
+
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    bytemuck::Zeroable,
+    bytemuck::Pod,
+)]
+#[repr(C)]
 pub struct SimulationBounds {
     pub mins: [i64; DIM],
     pub maxs: [i64; DIM],
+}
+
+impl SimulationBounds {
+    pub fn smallest() -> Self {
+        Self {
+            mins: [i64::MIN; DIM],
+            maxs: [i64::MIN; DIM],
+        }
+    }
 }
 
 impl Default for SimulationBounds {
@@ -99,6 +155,10 @@ impl SimulationBounds {
         result
     }
 
+    pub fn as_bytes(&self) -> SimulationBoundsU8 {
+        bytemuck::cast([self.mins, self.maxs])
+    }
+
     pub fn aabb(&self) -> Aabb {
         Aabb {
             mins: Point::from(self.mins).cast::<Real>(),
@@ -115,19 +175,23 @@ impl SimulationBounds {
     }
 
     #[cfg(feature = "dim2")]
-    pub fn zenoh_queue_key(&self) -> String {
+    pub fn to_string(&self) -> String {
         format!(
-            "runner/{}_{}__{}_{}",
+            "{}_{}__{}_{}",
             self.mins[0], self.mins[1], self.maxs[0], self.maxs[1]
         )
     }
 
     #[cfg(feature = "dim3")]
-    pub fn zenoh_queue_key(&self) -> String {
+    pub fn to_string(&self) -> String {
         format!(
-            "runner/{}_{}_{}__{}_{}_{}",
+            "{}_{}_{}__{}_{}_{}",
             self.mins[0], self.mins[1], self.mins[2], self.maxs[0], self.maxs[1], self.maxs[2]
         )
+    }
+
+    pub fn zenoh_queue_key(&self) -> String {
+        format!("runner/{}", self.to_string())
     }
 
     pub fn watch_kvs_key(&self) -> String {
@@ -245,6 +309,50 @@ impl SimulationBounds {
                 }
             }
         }
+
+        assert_eq!(curr, 13);
+
+        result
+    }
+
+    #[cfg(feature = "dim3")]
+    pub fn all_neighbors(&self) -> [Self; 26] {
+        let mut result = [*self; 26];
+        let mut curr = 0;
+
+        for i in -1..=1 {
+            for j in -1..=1 {
+                for k in -1..=1 {
+                    if i == 0 && j == 0 && k == 0 {
+                        continue; // Exclude self.
+                    }
+
+                    let width = [
+                        (self.maxs[0] - self.mins[0]) * i,
+                        (self.maxs[1] - self.mins[1]) * j,
+                        (self.maxs[2] - self.mins[2]) * k,
+                    ];
+
+                    let adj_region = Self {
+                        mins: [
+                            self.mins[0] + width[0],
+                            self.mins[1] + width[1],
+                            self.mins[2] + width[2],
+                        ],
+                        maxs: [
+                            self.maxs[0] + width[0],
+                            self.maxs[1] + width[1],
+                            self.maxs[2] + width[2],
+                        ],
+                    };
+
+                    result[curr] = adj_region;
+                    curr += 1;
+                }
+            }
+        }
+
+        assert_eq!(curr, 26);
 
         result
     }

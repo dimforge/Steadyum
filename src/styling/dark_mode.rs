@@ -1,8 +1,6 @@
 use crate::styling::Theme;
-use crate::{UiState, Visuals};
 use bevy::prelude::*;
 use bevy_egui::EguiContext;
-use bevy_infinite_grid::InfiniteGrid;
 
 pub fn update_dark_mode(
     mut commands: Commands,

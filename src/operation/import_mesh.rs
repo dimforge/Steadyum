@@ -1,5 +1,4 @@
 use crate::operation::{Operation, Operations};
-use crate::render::{ColliderRender, ColliderRenderTargets};
 use crate::utils::{ColliderRenderBundle, RigidBodyBundle};
 use bevy::prelude::*;
 use bevy_rapier::prelude::*;
@@ -24,7 +23,7 @@ pub fn import_mesh(
     }
 }
 
-pub fn set_trimesh_flags(mut changed_shapes: Query<&mut Collider, Changed<Collider>>) {
+pub fn set_trimesh_flags(_changed_shapes: Query<&mut Collider, Changed<Collider>>) {
     // for mut shape in changed_shapes.iter_mut() {
     //     if shape.as_trimesh().is_some() {
     //         // Check immutably first to avoid triggering bevy’s change detection.

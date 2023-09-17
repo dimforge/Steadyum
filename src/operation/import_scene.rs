@@ -1,12 +1,10 @@
 use crate::control::KinematicAnimationsComponent;
-use crate::operation::{Operation, Operations, PersistentIntersection};
-use crate::selection::Selection;
+use crate::operation::{Operation, Operations};
 use crate::storage::{ExistsInDb, HandleOrUuid};
 use crate::styling::ColorGenerator;
 use crate::utils::{ColliderBundle, ColliderRenderBundle, RigidBodyBundle};
 use bevy::prelude::*;
 use bevy_rapier::prelude::*;
-use bevy_rapier::rapier::data::Coarena;
 use std::collections::HashMap;
 
 pub fn import_scene(

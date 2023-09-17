@@ -103,13 +103,10 @@ pub fn update_intersection(
                                     &result,
                                     mesh1_pos,
                                 );
-                                commands
-                                    .entity(entity)
-                                    .insert_bundle(bundle)
-                                    .insert(Wireframe);
+                                commands.entity(entity).insert(bundle).insert(Wireframe);
                             }
                             Ok(None) => {
-                                commands.entity(entity).remove_bundle::<PbrBundle>();
+                                commands.entity(entity).remove::<PbrBundle>();
                             }
                             Err(err) => error!("mesh intersection failed {}", err),
                         }
@@ -127,10 +124,7 @@ pub fn update_intersection(
                                     &piece,
                                     mesh1_pos,
                                 );
-                                commands
-                                    .entity(entity)
-                                    .insert_bundle(bundle)
-                                    .insert(Wireframe);
+                                commands.entity(entity).insert(bundle).insert(Wireframe);
                             }
                             SplitResult::Negative => {
                                 let bundle = utils::bevy_pbr_bundle_from_trimesh(
@@ -138,13 +132,10 @@ pub fn update_intersection(
                                     &mesh1.raw,
                                     mesh1_pos,
                                 );
-                                commands
-                                    .entity(entity)
-                                    .insert_bundle(bundle)
-                                    .insert(Wireframe);
+                                commands.entity(entity).insert(bundle).insert(Wireframe);
                             }
                             _ => {
-                                commands.entity(entity).remove_bundle::<PbrBundle>();
+                                commands.entity(entity).remove::<PbrBundle>();
                             }
                         };
                     }
@@ -165,10 +156,7 @@ pub fn update_intersection(
                                 &intersection,
                                 mesh1_pos,
                             );
-                            commands
-                                .entity(entity)
-                                .insert_bundle(bundle)
-                                .insert(Wireframe);
+                            commands.entity(entity).insert(bundle).insert(Wireframe);
                         }
                     }
                 }

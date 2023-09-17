@@ -1,11 +1,9 @@
 use crate::builtin_scenes::BuiltinScene;
 use bevy::prelude::*;
-use bevy_rapier::prelude::{RapierContext, Velocity};
+use bevy_rapier::prelude::Velocity;
 use bevy_rapier::rapier::prelude::{GenericJoint, Real, RigidBodyHandle};
 use steadyum_api_types::objects::{ColdBodyObject, WarmBodyObject};
 use uuid::Uuid;
-
-const DEFAULT_SCENE_NAME: &'static str = "__draft";
 
 #[derive(Copy, Clone, Debug, Component)]
 pub struct External<T>(pub T);

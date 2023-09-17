@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy_rapier::plugin::RapierContext;
 
 use crate::storage::SaveFileData;
 use crate::utils::{ColliderBundle, RigidBodyBundle};

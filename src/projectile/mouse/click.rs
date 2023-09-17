@@ -4,20 +4,16 @@ use crate::ui::{ActiveMouseAction, SelectedTool, UiState};
 use bevy::prelude::*;
 use bevy_rapier::dynamics::{Ccd, Velocity};
 
-use crate::projectile::ProjectileState;
 use crate::utils::{ColliderBundle, RigidBodyBundle};
 use bevy_rapier::geometry::ColliderMassProperties;
 use bevy_rapier::prelude::Collider;
 
 pub fn handle_projectile_click(
-    mut commands: Commands,
-    mut projectile_state: ResMut<ProjectileState>,
     mut mouse_action: ResMut<ActiveMouseAction>,
     mut operations: ResMut<Operations>,
     ui_state: Res<UiState>,
     scene_mouse: Res<SceneMouse>,
     mouse: Res<Input<MouseButton>>,
-    transforms: Query<&Transform>,
 ) {
     let mut reset = false;
 

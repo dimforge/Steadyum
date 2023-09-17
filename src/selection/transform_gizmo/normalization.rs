@@ -1,6 +1,6 @@
 use crate::MainCamera;
 use bevy::transform::transform_propagate_system;
-use bevy::{prelude::*, render::camera::Camera, transform::TransformSystem};
+use bevy::{prelude::*, render::camera::Camera};
 
 use super::{GizmoSystemsEnabledCriteria, TransformGizmoSystem};
 

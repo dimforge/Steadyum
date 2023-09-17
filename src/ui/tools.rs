@@ -1,15 +1,20 @@
 use super::{ButtonTexture, SelectedTool, UiState};
 use crate::operation::{Operation, Operations};
-use bevy::prelude::Transform;
 use bevy::window::Window;
 use bevy_egui::{egui, EguiContext};
-use bevy_rapier::geometry::Collider;
-use bevy_rapier::math::Vect;
+
 use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
 
-use crate::utils::{ColliderBundle, RigidBodyBundle};
+#[cfg(feature = "voxels")]
+use {
+    crate::utils::{ColliderBundle, RigidBodyBundle},
+    bevy::prelude::Transform,
+    bevy_rapier::geometry::Collider,
+    bevy_rapier::math::Vect,
+};
+
 #[cfg(feature = "dim3")]
-use {crate::FillMode, bevy_rapier::geometry::ComputedColliderShape};
+use bevy_rapier::geometry::ComputedColliderShape;
 
 pub(super) fn ui(
     window: &Window,
@@ -175,7 +180,7 @@ pub(super) fn ui(
                                 path,
                                 ComputedColliderShape::Voxels {
                                     voxel_size: 0.1,
-                                    fill_mode: FillMode::SurfaceOnly, // FillMode::default(),
+                                    fill_mode: crate::FillMode::SurfaceOnly, // FillMode::default(),
                                 },
                             ))
                         }

@@ -89,6 +89,5 @@ debug = true
 #parry3d = { path = "../parry/crates/parry3d" }
 #rapier2d = { path = "../rapier/crates/rapier2d" }
 #rapier3d = { path = "../rapier/crates/rapier3d" }
-bevy_rapier2d = { path = "../bevy_rapier/bevy_rapier2d" }
-bevy_rapier3d = { path = "../bevy_rapier/bevy_rapier3d" }
-
+bevy_rapier2d = { git = "https://github.com/dimforge/bevy_rapier", branch = "gosim" }
+bevy_rapier3d = { git = "https://github.com/dimforge/bevy_rapier", branch = "gosim" }

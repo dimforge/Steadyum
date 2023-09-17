@@ -4,9 +4,6 @@ use redis::{Cmd, Commands};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-const COLD_BUCKET: &str = "steadyum-cold";
-const WARM_BUCKET: &str = "steadyum-warm";
-
 pub struct KvsContext {
     client: Client,
     connection: Connection,
@@ -15,7 +12,7 @@ pub struct KvsContext {
 impl KvsContext {
     pub fn new() -> anyhow::Result<Self> {
         let client = redis::Client::open("redis://127.0.0.1/")?;
-        let mut connection = client.get_connection()?;
+        let connection = client.get_connection()?;
 
         Ok(Self { client, connection })
     }

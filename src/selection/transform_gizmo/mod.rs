@@ -4,11 +4,9 @@
 use super::{SceneMouse, SelectableSceneObject, Selection};
 use crate::parry::query;
 use bevy::{ecs::schedule::ShouldRun, input::InputSystem, prelude::*, transform::TransformSystem};
-use bevy_rapier::dynamics::{MassProperties, ReadMassProperties};
-use bevy_rapier::prelude::AdditionalMassProperties;
+use bevy_rapier::dynamics::ReadMassProperties;
 use gizmo_material::{GizmoMaterial, GizmoStateMaterials};
 use normalization::*;
-use std::ops::Add;
 
 mod gizmo_material;
 mod mesh;
@@ -558,10 +556,10 @@ fn place_gizmo(
         .collect();
     let n_selected = selected.len();
     let transform_sum = selected.iter().fold(Vec3::ZERO, |acc, t| acc + *t);
+    // NOTE: mut is needed for dim2
     let mut centroid = transform_sum / n_selected as f32;
     // Set the gizmo's position and visibility
     if let Ok((mut g_transform, mut transform, mut visible)) = queries.p1().get_single_mut() {
-        let decomp_g_transform = g_transform.compute_transform();
         #[cfg(feature = "dim2")]
         {
             centroid.z = 1e-5; // Keep on top.

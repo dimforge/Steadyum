@@ -1,9 +1,8 @@
-use crate::kinematic::KinematicCurve;
-use crate::objects::WarmBodyObject;
+use crate::objects::{ColdBodyObject, WarmBodyObject};
 use crate::simulation::SimulationBounds;
-use rapier::dynamics::{GenericJoint, RigidBodyType};
+use rapier::dynamics::GenericJoint;
 use rapier::geometry::Aabb;
-use rapier::math::{Isometry, Point, Real, Vector};
+use rapier::math::{Isometry, Real};
 use uuid::Uuid;
 
 pub const PARTITIONNER_QUEUE: &str = "partitionner";
@@ -21,6 +20,13 @@ pub struct ImpulseJointAssignment {
     pub body1: Uuid,
     pub body2: Uuid,
     pub joint: GenericJoint,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct BodyAssignment {
+    pub uuid: Uuid,
+    pub warm: WarmBodyObject,
+    pub cold: ColdBodyObject, // TODO: don’t send the cold object?
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -74,13 +80,16 @@ pub enum PartitionnerMessage {
     },
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub enum RunnerMessage {
-    ReAssignObject {
-        uuid: Uuid,
-        warm_object: WarmBodyObject,
+    AssignRegion {
+        region: SimulationBounds,
+        time_origin: u64,
     },
-    AssignJoint(ImpulseJointAssignment),
+    AssignIsland {
+        bodies: Vec<BodyAssignment>,
+        impulse_joints: Vec<ImpulseJointAssignment>,
+    },
     MoveObject {
         uuid: Uuid,
         position: Isometry<Real>,
@@ -91,8 +100,9 @@ pub enum RunnerMessage {
     StartStop {
         running: bool,
     },
-    RunSteps {
-        curr_step: u64,
-        num_steps: u32,
-    },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug)]
+pub struct AckSteps {
+    pub step_id: u64,
 }

@@ -8,28 +8,23 @@ use crate::storage::{HandleOrUuid, SaveFileData};
 use crate::styling::ColorGenerator;
 use crate::ui::UiState;
 use crate::{MainCamera, PhysicsProgress};
+#[cfg(feature = "dim2")]
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
-use bevy::render::render_graph::EdgeExistence::Exists;
 use bevy::utils::Uuid;
-use bevy_rapier::dynamics::ImpulseJoint;
 use bevy_rapier::dynamics::RigidBody;
 use bevy_rapier::math::{Real, Vect};
-use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
+use bevy_rapier::plugin::RapierContext;
 use bevy_rapier::prelude::RapierColliderHandle;
 use bevy_rapier::prelude::RapierImpulseJointHandle;
 use bevy_rapier::prelude::RapierRigidBodyHandle;
 use bevy_rapier::rapier::math::Isometry;
-use bevy_rapier::rapier::prelude::{ColliderHandle, RigidBodyHandle};
 use bevy_rapier::utils::{iso_to_transform, transform_to_iso};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::AtomicU8;
-use steadyum_api_types::kinematic::KinematicAnimations;
+use std::collections::VecDeque;
 use steadyum_api_types::messages::{
     ImpulseJointAssignment, PartitionnerMessage, PARTITIONNER_QUEUE,
 };
-use steadyum_api_types::objects::{BodyPositionObject, ColdBodyObject, RegionList, WarmBodyObject};
-use winit::dpi::Position;
+use steadyum_api_types::objects::{ColdBodyObject, WarmBodyObject};
 
 #[derive(Copy, Clone, Debug, Default)]
 struct PositionInterpolationPoint {
@@ -110,7 +105,7 @@ pub fn publish_new_objects_to_kvs(
             Option<&KinematicAnimationsComponent>,
             Option<&ExistsInDb>,
         ),
-        (Added<RapierColliderHandle>),
+        Added<RapierColliderHandle>,
     >,
     added_joints: Query<(Entity, &RapierImpulseJointHandle), Without<ExistsInDb>>,
 ) {
@@ -188,13 +183,7 @@ pub fn update_start_stop(mut db: ResMut<DbContext>, ui: Res<UiState>) {
     if db.is_running != ui.running {
         dbg!("Update start stop.");
         db.is_running = ui.running;
-        let message = PartitionnerMessage::StartStop {
-            running: db.is_running,
-        };
-        db.zenoh
-            .lock()
-            .unwrap()
-            .put_json(PARTITIONNER_QUEUE, &message);
+        db.partitionner.set_running(db.is_running).unwrap();
     }
 }
 
@@ -220,7 +209,8 @@ pub fn write_selected_object_position_to_kvs(
             db.zenoh
                 .lock()
                 .unwrap()
-                .put_json(PARTITIONNER_QUEUE, &message);
+                .put_json(PARTITIONNER_QUEUE, &message)
+                .unwrap();
         }
     }
 }
@@ -233,13 +223,14 @@ pub fn write_modified_cold_objects_to_kvs(
     for (in_db, body, collider) in bodies.iter() {
         if let (Some(rb), Some(co)) = (ctxt.bodies.get(body.0), ctxt.colliders.get(collider.0)) {
             let cold = ColdBodyObject::from_body_collider(rb, co);
-            db.kvs.put_cold_object(in_db.uuid, &cold);
+            db.kvs.put_cold_object(in_db.uuid, &cold).unwrap();
 
             let message = PartitionnerMessage::UpdateColdObject { uuid: in_db.uuid };
             db.zenoh
                 .lock()
                 .unwrap()
-                .put_json(PARTITIONNER_QUEUE, &message);
+                .put_json(PARTITIONNER_QUEUE, &message)
+                .unwrap();
         }
     }
 }
@@ -278,7 +269,6 @@ pub fn read_object_positions_from_kvs(
     let latest_data = db.latest_data.read().unwrap();
     let mut new_progress_limit = u64::MAX;
     let t0 = instant::Instant::now();
-    let mut num_added_interp = 0;
 
     for (transform, rb_handle, selection, mut interpolation, mut color) in bodies.iter_mut() {
         if let Some(data) = latest_data.get(rb_handle.0 .0) {
@@ -296,7 +286,6 @@ pub fn read_object_positions_from_kvs(
             }
 
             // new_progress_limit = new_progress_limit.min(data.data.timestamp);
-            num_added_interp += 1;
 
             // NOTE: don’t trigger the color change detection if it didn’t change.
             let region_color = colors.gen_region_color(data.region.clone());
@@ -308,9 +297,7 @@ pub fn read_object_positions_from_kvs(
         new_progress_limit = new_progress_limit.min(interpolation.max_known_timestep());
     }
 
-    // dbg!(num_added_interp);
     // dbg!(latest_data.iter().count());
-    // dbg!(new_progress_limit);
     if new_progress_limit != u64::MAX {
         progress.progress_limit = progress.progress_limit.max(new_progress_limit as usize);
     }
@@ -395,10 +382,8 @@ pub fn update_camera_pos(db: Res<DbContext>, camera: Query<&Transform, With<Main
 // TODO: move to its own file?
 pub fn update_physics_progress(
     mut progress: ResMut<PhysicsProgress>,
-    config: Res<RapierConfiguration>,
     context: Res<RapierContext>,
     ui_state: Res<UiState>,
-    interpolations: Query<&PositionInterpolation>,
 ) {
     if ui_state.running {
         println!(
