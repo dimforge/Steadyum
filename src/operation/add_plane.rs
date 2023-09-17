@@ -9,7 +9,7 @@ pub fn add_plane(mut commands: Commands, operations: Res<Operations>) {
         if let Operation::AddPlane = op {
             commands
                 .spawn(Collider::halfspace(Vect::Y).unwrap())
-                .insert_bundle(RigidBodyBundle::fixed())
+                .insert(RigidBodyBundle::fixed())
                 .insert(ColliderRender::default());
         }
     }

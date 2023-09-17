@@ -100,8 +100,9 @@ pub enum RunnerMessage {
     StartStop {
         running: bool,
     },
-    RunSteps {
-        curr_step: u64,
-        num_steps: u32,
-    },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone, Debug)]
+pub struct AckSteps {
+    pub step_id: u64,
 }

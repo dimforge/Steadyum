@@ -1,7 +1,5 @@
 use bevy::prelude::*;
 
-pub(self) const ACTIVE_EPS: f32 = 1.0e-1;
-
 mod mouse;
 
 #[derive(Default, Clone, Resource)]

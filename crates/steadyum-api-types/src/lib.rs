@@ -13,3 +13,6 @@ pub mod simulation;
 pub mod region_db;
 #[cfg(feature = "zenoh")]
 pub mod zenoh;
+
+pub(crate) mod array_ser;
+pub mod partitionner;

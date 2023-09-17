@@ -1,453 +1,340 @@
-use std::collections::{HashMap, HashSet};
+use axum::extract::State;
+use axum::routing::get;
+use axum::{routing::post, Json, Router};
+use std::collections::HashMap;
 use std::process::{Child, Command};
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Arc, Condvar};
+use std::time::Duration;
 use steadyum_api_types::kvs::KvsContext;
-use steadyum_api_types::messages::{
-    ImpulseJointAssignment, PartitionnerMessage, RunnerMessage, PARTITIONNER_QUEUE,
+use steadyum_api_types::messages::RunnerMessage;
+use steadyum_api_types::objects::{RegionList, WarmBodyObjectSet, WatchedObjects};
+use steadyum_api_types::partitionner::{
+    AssignRunnerRequest, AssignRunnerResponse, InsertObjectsRequest, RunnerInitializedRequest,
+    StartStopRequest, ASSIGN_RUNNER_ENDPOINT, INSERT_OBJECTS_ENDPOINT, LIST_REGIONS_ENDPOINT,
+    PARTITIONNER_PORT, RUNNER_INITIALIZED_ENDPOINT, START_STOP_ENDPOINT,
 };
-use steadyum_api_types::objects::{RegionList, WarmBodyObject, WarmBodyObjectSet};
-use steadyum_api_types::rapier::parry::bounding_volume::{Aabb, BoundingVolume};
+use steadyum_api_types::rapier::parry::bounding_volume::BoundingVolume;
 use steadyum_api_types::simulation::SimulationBounds;
-use steadyum_api_types::zenoh::{put_json, ZenohContext};
+use steadyum_api_types::zenoh::{runner_zenoh_commands_key, ZenohContext};
+use tokio::sync::Mutex;
 use uuid::Uuid;
-use zenoh::prelude::sync::SyncResolve;
-use zenoh::prelude::SplitBuffer;
+use zenoh::prelude::r#async::AsyncResolve;
+
+const MAX_PENDING_RUNNERS: u32 = 10;
 
 pub struct Runner {
     pub process: Child,
-    pub assigned_objects: HashSet<Uuid>,
-    pub key: String,
+    pub uuid: Uuid,
     pub region: SimulationBounds,
     pub port: u32,
     pub started: bool,
-    pub pending: Vec<RunnerMessage>,
-}
-
-impl Runner {
-    fn send_pending_if_started(&mut self, zenoh: &ZenohContext) {
-        if self.started && !self.pending.is_empty() {
-            let publisher = zenoh
-                .session
-                .declare_publisher(&self.key)
-                .res_sync()
-                .expect("J");
-
-            for msg in self.pending.drain(..) {
-                put_json(&publisher, &msg);
-            }
-        }
-    }
 }
 
 pub struct LiveRunners {
     pub next_port_id: u32,
-    pub runners: HashMap<String, Runner>,
-    pub object2runner: HashMap<Uuid, String>,
+    pub assigned: HashMap<SimulationBounds, Runner>,
+    pub pending: Vec<Runner>,
+    pub uninitialized: HashMap<Uuid, Runner>,
 }
 
 impl Default for LiveRunners {
     fn default() -> Self {
         Self {
             next_port_id: 10_000,
-            runners: HashMap::default(),
-            object2runner: HashMap::default(),
+            assigned: HashMap::default(),
+            pending: vec![],
+            uninitialized: HashMap::default(),
         }
     }
 }
 
-fn assign_object_to_region(
-    zenoh: &ZenohContext,
-    db: &mut KvsContext,
-    runners: &mut LiveRunners,
-    region: SimulationBounds,
-    uuid: Uuid,
-    warm_object: WarmBodyObject,
-    curr_step: u64,
-    is_running: bool,
-) -> anyhow::Result<()> {
-    let runner_queue = region.zenoh_queue_key();
-    let runner_existed = runners.runners.contains_key(&runner_queue);
+struct SharedState {
+    runners: Mutex<LiveRunners>,
+    num_pending: AtomicU32,
+    resume_runner_allocation: Condvar,
+    assign_runner_lock: Mutex<()>,
+    zenoh: ZenohContext,
+    kvs: Mutex<KvsContext>,
+    running: AtomicBool,
+}
 
-    let runner_message = RunnerMessage::ReAssignObject {
-        uuid,
-        warm_object: warm_object.clone(),
-    };
+impl Default for SharedState {
+    fn default() -> Self {
+        Self {
+            runners: Mutex::new(LiveRunners::default()),
+            num_pending: AtomicU32::new(0),
+            resume_runner_allocation: Condvar::new(),
+            assign_runner_lock: Mutex::new(()),
+            zenoh: ZenohContext::new().unwrap(),
+            kvs: Mutex::new(KvsContext::new().unwrap()),
+            running: AtomicBool::new(false),
+        }
+    }
+}
 
-    // Spawn the worker if it doesn’t exist yet.
-    let runner = runners
+#[derive(Clone)]
+struct AppState {
+    data: Arc<SharedState>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            data: Arc::new(SharedState::default()),
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    init_log();
+    let state = AppState::default();
+    let state_clone = state.clone();
+
+    std::thread::spawn(move || {
+        smol::block_on(runner_allocator_loop(state_clone));
+    });
+
+    let app = Router::new()
+        .route(ASSIGN_RUNNER_ENDPOINT, post(assign_runner))
+        .route(RUNNER_INITIALIZED_ENDPOINT, post(runner_initialized))
+        .route(INSERT_OBJECTS_ENDPOINT, post(insert_objects))
+        .route(LIST_REGIONS_ENDPOINT, get(list_regions))
+        .route(START_STOP_ENDPOINT, post(start_stop))
+        .with_state(state);
+    axum::Server::bind(&format!("0.0.0.0:{}", PARTITIONNER_PORT).parse().unwrap())
+        .serve(app.into_make_service())
+        .await
+        .unwrap();
+}
+
+async fn start_stop(State(state): State<AppState>, Json(payload): Json<StartStopRequest>) {
+    state.data.running.store(payload.running, Ordering::SeqCst);
+    let runners: Vec<_> = state
+        .data
         .runners
-        .entry(runner_queue.clone())
-        .or_insert_with(|| {
-            dbg!("Spawning child process", region.zenoh_queue_key());
-            // HACK: clear the runner’s files before creating it.
-            // Won’t be needed once we support scene names.
-            db.put_warm(
-                &region.runner_key(),
-                &WarmBodyObjectSet {
-                    timestamp: curr_step,
-                    objects: vec![],
-                },
-            )
-            .unwrap();
+        .lock()
+        .await
+        .assigned
+        .values()
+        .map(|runner| runner.uuid)
+        .collect();
 
-            // Spawn the runner.
-            let port = runners.next_port_id;
-            runners.next_port_id += 1;
-            let process = region
-                .command("steadyum-runner.exe", curr_step, port)
-                .spawn()
-                .unwrap();
-            Runner {
-                process,
-                assigned_objects: HashSet::new(),
-                key: region.runner_key(),
-                region,
-                port,
-                started: false,
-                pending: vec![],
+    for uuid in runners {
+        put_runner_message(
+            &state.data.zenoh,
+            uuid,
+            RunnerMessage::StartStop {
+                running: payload.running,
+            },
+        )
+        .await
+        .unwrap();
+    }
+}
+
+async fn list_regions(State(state): State<AppState>) -> Json<RegionList> {
+    let runners = state.data.runners.lock().await;
+    Json(RegionList {
+        keys: runners
+            .assigned
+            .values()
+            .map(|r| r.region.runner_key())
+            .collect(),
+        ports: runners.assigned.values().map(|r| r.port).collect(),
+    })
+}
+
+async fn insert_objects(State(state): State<AppState>, Json(payload): Json<InsertObjectsRequest>) {
+    log::info!("Inserting {} objects.", payload.bodies.len());
+
+    let mut region_to_objects = HashMap::new();
+
+    // Group object by region.
+    for body in payload.bodies {
+        // TODO: not calculating islands here will induce a 1-step delay between the
+        //       time the objects are simulated and the time they become aware of any
+        //       potential island merge across the boundary.
+        let aabb = body.cold.shape.compute_aabb(&body.warm.position);
+
+        if body.cold.body_type.is_dynamic() {
+            let region = SimulationBounds::from_aabb(&aabb, SimulationBounds::DEFAULT_WIDTH);
+            region_to_objects
+                .entry(region)
+                .or_insert_with(Vec::new)
+                .push(body);
+        } else {
+            for region in SimulationBounds::intersecting_aabb(
+                aabb.loosened(1.0),
+                SimulationBounds::DEFAULT_WIDTH,
+            ) {
+                region_to_objects
+                    .entry(region)
+                    .or_insert_with(Vec::new)
+                    .push(body.clone());
             }
-        });
-    runner.assigned_objects.insert(uuid.to_owned());
-    runners
-        .object2runner
-        .insert(uuid.to_owned(), runner_queue.clone());
+        }
+    }
 
-    if !runner_existed {
-        runner.pending.push(RunnerMessage::StartStop {
-            running: is_running,
+    // Send objects to runners.
+    for (region, bodies) in region_to_objects {
+        let runner =
+            assign_runner(State(state.clone()), Json(AssignRunnerRequest { region })).await;
+
+        log::info!("Inserting {} objects to {}", bodies.len(), runner.uuid);
+
+        // Send message to the runner.
+        let message = RunnerMessage::AssignIsland {
+            bodies,
+            impulse_joints: vec![],
+        };
+        put_runner_message(&state.data.zenoh, runner.uuid, message)
+            .await
+            .unwrap();
+    }
+}
+
+async fn runner_initialized(
+    State(state): State<AppState>,
+    Json(payload): Json<RunnerInitializedRequest>,
+) {
+    let mut runners = state.data.runners.lock().await;
+
+    if let Some(runner) = runners.uninitialized.remove(&payload.uuid) {
+        log::info!("Runner {:?} acked initialization.", payload.uuid);
+        runners.pending.push(runner);
+    }
+}
+
+async fn assign_runner(
+    State(state): State<AppState>,
+    Json(payload): Json<AssignRunnerRequest>,
+) -> Json<AssignRunnerResponse> {
+    // TODO: this basically makes this endpoint operate completely sequentially.
+    //       How could we avoid this?
+    let _lock_guard = state.data.assign_runner_lock.lock();
+
+    let runners = state.data.runners.lock().await;
+    if let Some(runner) = runners.assigned.get(&payload.region) {
+        return Json(AssignRunnerResponse {
+            region: payload.region,
+            uuid: runner.uuid,
         });
     }
 
-    runner.pending.push(runner_message);
-    runner.send_pending_if_started(&zenoh);
+    log::info!(
+        "No region assigned to region {:?} yet. Num pending: {}",
+        payload.region,
+        runners.pending.len()
+    );
+    drop(runners);
 
-    Ok(())
+    // No runner exist for this region yet, assign one.
+    loop {
+        let mut runners = state.data.runners.lock().await;
+        if let Some(mut runner) = runners.pending.pop() {
+            let uuid = runner.uuid;
+            runner.region = payload.region;
+            runners.assigned.insert(payload.region, runner);
+            let time_origin = 1; // TODO
+
+            // Reset warm and watch sets.
+            // TODO: this should either be done elsewhere to not block the
+            //       partitionner, or we should add a "scene UUID" to these objects
+            //       so viewer can’t mix them up.
+            state
+                .data
+                .kvs
+                .lock()
+                .await
+                .put_warm(
+                    &payload.region.runner_key(),
+                    &WarmBodyObjectSet {
+                        timestamp: time_origin,
+                        objects: vec![],
+                    },
+                )
+                .unwrap();
+
+            // Send message to the runner.
+            let message = RunnerMessage::AssignRegion {
+                region: payload.region,
+                time_origin,
+            };
+            put_runner_message(&state.data.zenoh, uuid, message)
+                .await
+                .unwrap();
+
+            drop(runners);
+
+            state.data.num_pending.fetch_sub(1, Ordering::SeqCst);
+            state.data.resume_runner_allocation.notify_all();
+
+            return Json(AssignRunnerResponse {
+                region: payload.region,
+                uuid,
+            });
+        } else {
+            // Free the lock before waiting.
+            drop(runners);
+            // There is no runner available yet. Wait for at least one to come online.
+            std::thread::sleep(Duration::from_millis(5))
+        }
+    }
 }
 
-fn main() -> anyhow::Result<()> {
+fn init_log() {
     let mut builder = env_logger::Builder::new();
     builder.filter_level(log::LevelFilter::Info);
     builder.init();
-
-    let zenoh = ZenohContext::new().expect("G");
-    let consumer = zenoh
-        .session
-        .declare_subscriber(PARTITIONNER_QUEUE)
-        .res_sync()
-        .expect("H");
-
-    // Kvs for the region list.
-    let mut db = KvsContext::new()?;
-
-    let mut runners = LiveRunners::default();
-    let mut is_running = false;
-    let mut step_id = 0;
-    println!("Waiting for messages. Press Ctrl-C to exit.");
-
-    db.put("region_list", &RegionList::default());
-
-    let assign_single_joint = |joint: ImpulseJointAssignment, runners: &mut LiveRunners| {
-        let runner_message = RunnerMessage::AssignJoint(joint);
-
-        if let (Some(run_key1), Some(run_key2)) = (
-            runners.object2runner.get(&joint.body1),
-            runners.object2runner.get(&joint.body2),
-        ) {
-            if let (Some(runner1), Some(runner2)) =
-                (runners.runners.get(run_key1), runners.runners.get(run_key2))
-            {
-                zenoh.put_json(&run_key1, &runner_message);
-                if runner1.region != runner2.region {
-                    zenoh.put_json(&run_key2, &runner_message);
-                }
-
-                // if runner1.region >= runner2.region {
-                //     zenoh.publish(&runner_message, &run_key1);
-                // } else {
-                //     zenoh.publish(&runner_message, &run_key2);
-                // }
-            }
-        }
-    };
-
-    let assign_single_object = |uuid: Uuid,
-                                origin,
-                                aabb: Aabb,
-                                warm_object,
-                                dynamic,
-                                runners: &mut LiveRunners,
-                                db: &mut KvsContext,
-                                curr_step: u64,
-                                is_running| {
-        let regions = if dynamic {
-            vec![SimulationBounds::from_point(
-                aabb.maxs,
-                SimulationBounds::DEFAULT_WIDTH,
-            )]
-        } else {
-            SimulationBounds::intersecting_aabb(aabb.loosened(1.0), SimulationBounds::DEFAULT_WIDTH)
-        };
-
-        if let Some(origin) = runners.object2runner.remove(&uuid) {
-            if let Some(runner) = runners.runners.get_mut(&origin) {
-                // Remove previous assignment.
-                runner.assigned_objects.remove(&uuid);
-            }
-        }
-
-        for region in regions {
-            assign_object_to_region(
-                &zenoh,
-                db,
-                runners,
-                region,
-                uuid,
-                warm_object,
-                curr_step,
-                is_running,
-            )?;
-        }
-
-        Ok::<(), anyhow::Error>(())
-    };
-
-    const STEP_INCREMENTS: u32 = 20;
-    let mut pending_acks = 0;
-    let mut curr_step = 0;
-    let mut last_ack_time = Instant::now();
-
-    loop {
-        let sample = consumer.recv().expect("I");
-        let num_regions_before = runners.runners.len();
-        let payload = sample.value.payload.contiguous();
-        let body = String::from_utf8_lossy(&payload);
-
-        if let Ok(message) = serde_json::from_str::<PartitionnerMessage>(&body) {
-            match message {
-                PartitionnerMessage::AckSteps { stopped, origin } => {
-                    pending_acks -= 1;
-
-                    if stopped {
-                        runners.runners.remove(&origin);
-                    }
-                }
-                PartitionnerMessage::StartStop { running } => {
-                    if running != is_running {
-                        let message = RunnerMessage::StartStop { running };
-                        is_running = running;
-
-                        for (_, runner) in &mut runners.runners {
-                            runner.pending.push(message.clone());
-                            runner.send_pending_if_started(&zenoh);
-                        }
-                    }
-                }
-                PartitionnerMessage::AssignMulipleImpulseJoints { joints } => {
-                    for joint in joints {
-                        assign_single_joint(joint, &mut runners);
-                    }
-                }
-                PartitionnerMessage::AssignImpulseJointTo { joint, target } => {
-                    assign_single_joint(joint, &mut runners);
-                }
-                PartitionnerMessage::ReAssignImpulseJoint(joint) => {
-                    assign_single_joint(joint, &mut runners);
-                }
-                PartitionnerMessage::AssignMultipleObjects { objects } => {
-                    for object in objects {
-                        assign_single_object(
-                            object.uuid,
-                            None,
-                            object.aabb,
-                            object.warm_object,
-                            object.dynamic,
-                            &mut runners,
-                            &mut db,
-                            curr_step,
-                            is_running,
-                        )?;
-                    }
-                }
-                PartitionnerMessage::AssignIsland { origin, objects } => {
-                    // Calculate the common target runner for al the objects.
-                    if let Some(runner) = runners.runners.get_mut(&origin) {
-                        // Remove previous assignment.
-                        for object in &objects {
-                            runner.assigned_objects.remove(&object.uuid);
-                        }
-                    }
-
-                    let mut target_region = SimulationBounds::from_point(
-                        objects[0].aabb.maxs,
-                        SimulationBounds::DEFAULT_WIDTH,
-                    );
-
-                    for object in &objects {
-                        let candidate_region = SimulationBounds::from_point(
-                            object.aabb.maxs,
-                            SimulationBounds::DEFAULT_WIDTH,
-                        );
-
-                        if candidate_region > target_region {
-                            target_region = candidate_region;
-                        }
-                    }
-
-                    for object in objects {
-                        assign_object_to_region(
-                            &zenoh,
-                            &mut db,
-                            &mut runners,
-                            target_region,
-                            object.uuid,
-                            object.warm_object,
-                            curr_step,
-                            is_running,
-                        )?;
-                    }
-                }
-                PartitionnerMessage::AssignObjectTo {
-                    uuid,
-                    origin,
-                    target,
-                    warm_object,
-                } => {
-                    if let Some(runner) = runners.runners.get_mut(&origin) {
-                        // Remove previous assignment.
-                        runner.assigned_objects.remove(&uuid);
-                    }
-
-                    assign_object_to_region(
-                        &zenoh,
-                        &mut db,
-                        &mut runners,
-                        target,
-                        uuid,
-                        warm_object,
-                        curr_step,
-                        is_running,
-                    )?;
-                }
-                PartitionnerMessage::ReAssignObject {
-                    uuid,
-                    origin,
-                    aabb,
-                    warm_object,
-                    dynamic,
-                } => assign_single_object(
-                    uuid,
-                    Some(origin),
-                    aabb,
-                    warm_object,
-                    dynamic,
-                    &mut runners,
-                    &mut db,
-                    curr_step,
-                    is_running,
-                )?,
-                PartitionnerMessage::MoveObject { uuid, position } => {
-                    // Broadcast the message to all the runners dealing with this object.
-                    let runner_message = RunnerMessage::MoveObject { uuid, position };
-                    for (_, runner) in &mut runners.runners {
-                        if runner.assigned_objects.contains(&uuid) {
-                            runner.pending.push(runner_message.clone());
-                            runner.send_pending_if_started(&zenoh);
-                        }
-                    }
-                }
-                PartitionnerMessage::UpdateColdObject { uuid } => {
-                    // Broadcast the message to all the runners dealing with this object.
-                    let runner_message = RunnerMessage::UpdateColdObject { uuid };
-                    for (_, runner) in &mut runners.runners {
-                        if runner.assigned_objects.contains(&uuid) {
-                            runner.pending.push(runner_message.clone());
-                            runner.send_pending_if_started(&zenoh);
-                        }
-                    }
-                }
-                PartitionnerMessage::RemoveObject => { /* TODO */ }
-                PartitionnerMessage::AckStart { origin } => {
-                    if let Some(runner) = runners.runners.get_mut(&origin) {
-                        println!("Runner {origin} acked start.");
-                        runner.started = true;
-                        runner.send_pending_if_started(&zenoh);
-                    }
-                }
-            }
-        }
-
-        let num_regions_after = runners.runners.len();
-
-        if num_regions_after != num_regions_before {
-            let region_list = RegionList {
-                keys: runners.runners.values().map(|r| r.key.clone()).collect(),
-                ports: runners.runners.values().map(|r| r.port).collect(),
-            };
-            db.put("region_list", &region_list);
-        }
-        if pending_acks == 0 && !runners.runners.is_empty() {
-            let real_time_step_increments_duration = STEP_INCREMENTS as f32 * 0.016;
-            if last_ack_time.elapsed().as_secs_f32() < real_time_step_increments_duration {
-                std::thread::sleep(Duration::from_secs_f32(
-                    real_time_step_increments_duration - last_ack_time.elapsed().as_secs_f32(),
-                ));
-            }
-            last_ack_time = Instant::now();
-
-            if is_running {
-                for runner in runners.runners.values_mut() {
-                    runner.pending.push(RunnerMessage::RunSteps {
-                        curr_step,
-                        num_steps: STEP_INCREMENTS,
-                    });
-                    runner.send_pending_if_started(&zenoh);
-                    pending_acks += 1;
-                }
-
-                curr_step += STEP_INCREMENTS as u64;
-            }
-        }
-    }
-
-    Ok(())
 }
 
-// struct MongoDb {
-//     client: mongodb::sync::Client,
-//     database: mongodb::sync::Database,
-//     counters: mongodb::sync::Collection,
-// }
-//
-// impl MongoDb {
-//     pub fn new() -> Self {
-//         let mut client_options =
-//             mongodb::options::ClientOptions::parse("mongodb://localhost:27017")?;
-//         let client = mongodb::sync::Client::with_options(client_options)?;
-//         let database = client.database("steadyum");
-//         let counters = client.collection::<u32>();
-//         Self {
-//             client,
-//             database,
-//             counters,
-//         }
-//     }
-//
-//     pub fn reset_counter(&mut self) {
-//         self.counters.find_one_and_delete(doc! {
-//             { count },
-//             None
-//         })
-//     }
-//
-//     pub fn inc_counter(&mut self) -> u32 {
-//         let val = self.counters.find_one_and_update(
-//             doc! {},
-//             doc! {
-//                 $inc: { count: 1 },
-//                 {returnOriginal: false}
-//             },
-//             None,
-//         );
-//         val.unwrap().unwrap()
-//     }
-// }
+async fn runner_allocator_loop(state: AppState) {
+    let condvar_mutex = std::sync::Mutex::new(());
+    loop {
+        while state.data.num_pending.load(Ordering::Relaxed) < MAX_PENDING_RUNNERS {
+            // NOTE: we lock before spawning the process to be sure we have a chance to
+            //       add the runner to the pending queue before the runner acknowledges
+            //       its initialization.
+            let uuid = Uuid::new_v4();
+            log::info!("Spawning new runner: {:?}.", uuid);
+            let mut locked_runners = state.data.runners.lock().await;
+            let process = Command::new("steadyum-runner.exe")
+                .args(["--uuid".to_string(), format!("{}", uuid.to_u128_le())])
+                .spawn()
+                .unwrap();
+            let runner = Runner {
+                process,
+                uuid,
+                region: SimulationBounds::smallest(),
+                port: 0, // TODO: might become needed in the future?
+                started: false,
+            };
+            locked_runners.uninitialized.insert(runner.uuid, runner);
+            drop(locked_runners);
+
+            state.data.num_pending.fetch_add(1, Ordering::SeqCst);
+        }
+
+        let condvar_lock = condvar_mutex.lock().unwrap();
+        let _ = state.data.resume_runner_allocation.wait(condvar_lock);
+    }
+}
+
+pub async fn put_runner_message(
+    zenoh: &ZenohContext,
+    uuid: Uuid,
+    message: RunnerMessage,
+) -> anyhow::Result<()> {
+    let message_str = serde_json::to_string(&message)?;
+    let zenoh_key = runner_zenoh_commands_key(uuid);
+    let publisher = zenoh
+        .session
+        .declare_publisher(&zenoh_key)
+        .res()
+        .await
+        .unwrap();
+    publisher.put(message_str).res().await.unwrap();
+    Ok(())
+}

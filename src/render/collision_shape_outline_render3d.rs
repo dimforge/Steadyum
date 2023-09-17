@@ -2,7 +2,6 @@ use crate::cli::CliArgs;
 use crate::render::{ColliderOutlineRender, ColliderRenderTargets};
 use bevy::prelude::*;
 use bevy_polyline::prelude::*;
-use bevy_rapier::plugin::RapierConfiguration;
 use bevy_rapier::prelude::{Collider, ColliderView};
 use bevy_rapier::rapier::math::{Point, Real};
 
@@ -11,8 +10,6 @@ pub fn create_collider_outline_renders_system(
     cli: Res<CliArgs>,
     mut polylines: ResMut<Assets<Polyline>>,
     mut materials: ResMut<Assets<PolylineMaterial>>,
-    configuration: Res<RapierConfiguration>,
-    colliders: Query<&Collider>,
     mut coll_shape_render: Query<
         (
             Entity,
@@ -29,7 +26,7 @@ pub fn create_collider_outline_renders_system(
         return;
     }
 
-    for (entity, collider, mut render, mut render_target) in coll_shape_render.iter_mut() {
+    for (entity, collider, render, mut render_target) in coll_shape_render.iter_mut() {
         if let Some(polyline) = generate_collision_shape_render_outline(collider) {
             let material = PolylineMaterial {
                 color: render.color,
@@ -52,7 +49,7 @@ pub fn create_collider_outline_renders_system(
                 }
             } else {
                 let target = commands.entity(entity).with_children(|cmd| {
-                    let target = cmd.spawn_bundle(bundle).id();
+                    let target = cmd.spawn(bundle).id();
                     render_target.outline_target = Some(target);
                 });
             }

@@ -12,7 +12,6 @@ mod watch;
 
 use crate::cli::CliArgs;
 use clap::Parser;
-use uuid::Uuid;
 
 fn main() -> anyhow::Result<()> {
     let mut builder = env_logger::Builder::new();

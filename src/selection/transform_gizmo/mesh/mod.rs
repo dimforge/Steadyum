@@ -74,11 +74,11 @@ pub fn build_gizmo(
 
     // Build the gizmo using the variables above.
     commands
-        .spawn_bundle(TransformGizmoBundle::default())
+        .spawn(TransformGizmoBundle::default())
         .with_children(|parent| {
             // Translation Handles
             parent
-                .spawn_bundle(ColorMesh2dBundle {
+                .spawn(ColorMesh2dBundle {
                     mesh: translation_mesh.clone().into(),
                     material: gizmo_matl_x.clone(),
                     transform: Transform::from_matrix(Mat4::from_rotation_translation(
@@ -95,7 +95,7 @@ pub fn build_gizmo(
                     axis: Vec3::X,
                 });
             parent
-                .spawn_bundle(ColorMesh2dBundle {
+                .spawn(ColorMesh2dBundle {
                     mesh: translation_mesh.clone().into(),
                     material: gizmo_matl_y.clone(),
                     transform: Transform::from_translation(Vec3::new(
@@ -115,7 +115,7 @@ pub fn build_gizmo(
 
             // Rotation Arcs
             parent
-                .spawn_bundle(ColorMesh2dBundle {
+                .spawn(ColorMesh2dBundle {
                     mesh: rotation_mesh.clone().into(),
                     material: gizmo_matl_z.clone(),
                     ..Default::default()
@@ -130,7 +130,7 @@ pub fn build_gizmo(
 
             // Scaling Handles
             parent
-                .spawn_bundle(ColorMesh2dBundle {
+                .spawn(ColorMesh2dBundle {
                     mesh: cube_mesh.clone().into(),
                     material: gizmo_matl_x.clone(),
                     transform: Transform::from_translation(Vec3::new(axis_length + 0.5, 0.0, 0.0)),
@@ -143,7 +143,7 @@ pub fn build_gizmo(
                     axis: Vec3::X,
                 });
             parent
-                .spawn_bundle(ColorMesh2dBundle {
+                .spawn(ColorMesh2dBundle {
                     mesh: cube_mesh.clone().into(),
                     material: gizmo_matl_y.clone(),
                     transform: Transform::from_translation(Vec3::new(0.0, axis_length + 0.5, 0.0)),
@@ -228,11 +228,11 @@ pub fn build_gizmo(
     });*/
     // Build the gizmo using the variables above.
     commands
-        .spawn_bundle(TransformGizmoBundle::default())
+        .spawn(TransformGizmoBundle::default())
         .with_children(|parent| {
             // Translation Handles
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: translation_mesh.clone(),
                     material: gizmo_matl_x.clone(),
                     transform: Transform::from_matrix(Mat4::from_rotation_translation(
@@ -251,7 +251,7 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: translation_mesh.clone(),
                     material: gizmo_matl_y.clone(),
                     transform: Transform::from_translation(Vec3::new(0.0, axis_length, 0.0)),
@@ -267,7 +267,7 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: translation_mesh.clone(),
                     material: gizmo_matl_z.clone(),
                     transform: Transform::from_matrix(Mat4::from_rotation_translation(
@@ -287,7 +287,7 @@ pub fn build_gizmo(
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             // Rotation Arcs
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: rotation_mesh.clone(),
                     material: gizmo_matl_x.clone(),
                     transform: Transform::from_rotation(Quat::from_axis_angle(
@@ -305,7 +305,7 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: rotation_mesh.clone(),
                     material: gizmo_matl_y.clone(),
                     ..Default::default()
@@ -319,7 +319,7 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: rotation_mesh.clone(),
                     material: gizmo_matl_z.clone(),
                     transform: Transform::from_rotation(
@@ -339,7 +339,7 @@ pub fn build_gizmo(
 
             // Scaling Handles
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: cube_mesh.clone(),
                     material: gizmo_matl_x.clone(),
                     transform: Transform::from_translation(Vec3::new(axis_length + 0.5, 0.0, 0.0)),
@@ -354,7 +354,7 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: cube_mesh.clone(),
                     material: gizmo_matl_y.clone(),
                     transform: Transform::from_translation(Vec3::new(0.0, axis_length + 0.5, 0.0)),
@@ -369,7 +369,7 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn_bundle(MaterialMeshBundle {
+                .spawn(MaterialMeshBundle {
                     mesh: cube_mesh.clone(),
                     material: gizmo_matl_z.clone(),
                     transform: Transform::from_translation(Vec3::new(0.0, 0.0, axis_length + 0.5)),

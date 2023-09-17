@@ -12,7 +12,6 @@ fn create_wall(
     half_extents: Vector<f32>,
 ) {
     let shift = half_extents * 2.0;
-    let mut k = 0;
     for i in 0usize..stack_height {
         for j in i..stack_height {
             let fj = j as f32;
@@ -27,7 +26,6 @@ fn create_wall(
             let handle = bodies.insert(rigid_body);
             let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z);
             colliders.insert_with_parent(collider, handle, bodies);
-            k += 1;
         }
     }
 }

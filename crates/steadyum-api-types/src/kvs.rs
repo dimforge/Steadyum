@@ -4,9 +4,6 @@ use redis::{Cmd, Commands};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-const COLD_BUCKET: &str = "steadyum-cold";
-const WARM_BUCKET: &str = "steadyum-warm";
-
 pub struct KvsContext {
     client: Client,
     connection: Connection,

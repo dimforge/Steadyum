@@ -1,5 +1,4 @@
 use crate::operation::{Operation, Operations};
-use crate::render::{ColliderOutlineRender, ColliderRender};
 use crate::styling::ColorGenerator;
 use crate::utils::ColliderRenderBundle;
 use bevy::prelude::*;

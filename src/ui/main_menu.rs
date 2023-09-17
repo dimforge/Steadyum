@@ -6,7 +6,6 @@ use crate::ui::{debug_render, UiState};
 use bevy::app::AppExit;
 use bevy::prelude::*;
 use bevy::window::Window;
-use bevy_egui::egui::Visuals;
 use bevy_egui::{egui, EguiContext};
 use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
 use bevy_rapier::render::DebugRenderContext;
@@ -20,7 +19,7 @@ pub(super) fn ui(
     theme: &mut Theme,
     ui_context: &mut EguiContext,
     ui_state: &mut UiState,
-    physics_context: &mut RapierContext,
+    _physics_context: &mut RapierContext,
     _physics_config: &mut RapierConfiguration,
     debug_render_context: &mut DebugRenderContext,
     operations: &mut Operations,

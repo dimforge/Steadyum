@@ -6,13 +6,10 @@ extern crate nalgebra as na;
 
 pub use bevy_rapier::parry;
 pub use bevy_rapier::rapier;
-use std::process::Command;
 
 use crate::camera::{OrbitCamera, OrbitCameraPlugin};
 use crate::cli::CliArgs;
 use crate::layers::GIZMO_LAYER;
-use crate::render::{ColliderRender, ColliderRenderTargets};
-use crate::styling::ColorGenerator;
 use crate::ui::UiState;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
@@ -21,7 +18,6 @@ use bevy::render::view::RenderLayers;
 use bevy::window::WindowId;
 use bevy::winit::WinitWindows;
 use bevy_egui::egui::Visuals;
-use bevy_egui::EguiContext;
 use bevy_infinite_grid::GridShadowCamera;
 use bevy_rapier::prelude::*;
 use clap::Parser;
@@ -70,11 +66,11 @@ pub enum SteadyumStages {
 fn main() {
     let args = CliArgs::parse();
 
-    let title = if cfg!(feature = "dim2") {
-        "Steadyum 2D".to_string()
-    } else {
-        "Steadyum 3D".to_string()
-    };
+    // let title = if cfg!(feature = "dim2") {
+    //     "Steadyum 2D".to_string()
+    // } else {
+    //     "Steadyum 3D".to_string()
+    // };
 
     let mut app = App::new();
     app
@@ -83,7 +79,6 @@ fn main() {
             ..Default::default()
         })*/
         .insert_resource(ClearColor(Color::rgb(0.55, 0.55, 0.55)))
-        // .insert_resource(Msaa::default())
         .insert_resource(args)
         .insert_resource(PhysicsProgress::default())
         .add_plugins(DefaultPlugins)
@@ -290,7 +285,7 @@ pub fn setup_physics(
     mut debug_render_context: ResMut<DebugRenderContext>,
 ) {
     config.physics_pipeline_active = false;
-    config.query_pipeline_active = true; // !cli.distributed_physics;
+    config.query_pipeline_active = !cli.distributed_physics;
     debug_render_context.pipeline.style.rigid_body_axes_length = 0.5;
     debug_render_context.always_on_top = cfg!(feature = "dim2");
     debug_render_context.enabled = false;

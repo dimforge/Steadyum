@@ -1,79 +1,68 @@
-use crate::simulation::{SimulationBounds, SimulationBoundsU8};
-use mongodb::bson::doc;
-use mongodb::sync::{Client, Collection, Database};
-use rapier::math::DIM;
+use crate::messages::BodyAssignment;
+use crate::objects::RegionList;
+use crate::partitionner::{
+    AssignRunnerRequest, AssignRunnerResponse, InsertObjectsRequest, RunnerInitializedRequest,
+    StartStopRequest, ASSIGN_RUNNER_ENDPOINT, INSERT_OBJECTS_ENDPOINT, LIST_REGIONS_ENDPOINT,
+    PARTITIONNER_PORT, RUNNER_INITIALIZED_ENDPOINT, START_STOP_ENDPOINT,
+};
+use crate::simulation::SimulationBounds;
+use reqwest::blocking::Client;
 use uuid::Uuid;
 
-#[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
-pub struct RunnerDocument {
-    pub uuid: Uuid,
-    pub region: Option<SimulationBoundsU8>,
-    pub allocated: bool,
-}
-
-#[derive(Copy, Clone, serde::Serialize, serde::Deserialize)]
-pub struct AllocateRunnerDocument {
-    pub allocated: bool,
-    pub region: SimulationBoundsU8,
-}
-
-pub struct DbContext {
+pub struct PartitionnerServer {
     client: Client,
-    database: Database,
-    runners: Collection<RunnerDocument>,
 }
 
-impl DbContext {
+impl PartitionnerServer {
     pub fn new() -> anyhow::Result<Self> {
-        let client = Client::with_uri_str("mongodb://localhost:27017")?;
-        let database = client.database("steadyum");
-        let runners = database.collection::<RunnerDocument>("runners");
-
-        Ok(Self {
-            client,
-            database,
-            runners,
-        })
+        let client = Client::new();
+        Ok(Self { client })
     }
 
-    pub fn put_new_runner(&self, uuid: Uuid) -> anyhow::Result<()> {
-        let doc = RunnerDocument {
-            uuid,
-            region: None,
-            allocated: false,
-        };
-        self.runners.insert_one(doc, None)?;
+    pub fn put_runner_initialized(&self, uuid: Uuid) -> anyhow::Result<()> {
+        let body = RunnerInitializedRequest { uuid };
+        self.client
+            .post(endpoint(RUNNER_INITIALIZED_ENDPOINT))
+            .json(&body)
+            .send()?;
         Ok(())
     }
 
     pub fn allocate_runner(&self, region: SimulationBounds) -> anyhow::Result<Uuid> {
-        let region_key = region.as_bytes();
-        let allocated_value = AllocateRunnerDocument {
-            allocated: true,
-            region: region_key,
-        };
-
-        loop {
-            let result = self.runners.find_one_and_update(
-                doc! { "allocated": false },
-                doc! {
-                    "$set": allocated_value,
-                },
-                None,
-            );
-
-            match result {
-                Ok(Some(result)) => return Ok(result.uuid),
-                Ok(None) => {
-                    /* Wait for a runner to be available. */
-                    dbg!("Waiting for runner to become available.");
-                }
-                Err(_) => {
-                    // Duplicate region key, it already exists.
-                    let region = self.runners.find_one(doc! { "region": region_key }, None)?;
-                    return Ok(region.unwrap().uuid);
-                }
-            }
-        }
+        let body = AssignRunnerRequest { region };
+        let raw_response = self
+            .client
+            .post(endpoint(ASSIGN_RUNNER_ENDPOINT))
+            .json(&body)
+            .send()?;
+        let response: AssignRunnerResponse = raw_response.json()?;
+        Ok(response.uuid)
     }
+
+    pub fn insert_objects(&self, bodies: Vec<BodyAssignment>) -> anyhow::Result<()> {
+        let body = InsertObjectsRequest { bodies };
+        self.client
+            .post(endpoint(INSERT_OBJECTS_ENDPOINT))
+            .json(&body)
+            .send()?;
+        Ok(())
+    }
+
+    pub fn list_regions(&self) -> anyhow::Result<RegionList> {
+        let raw_response = self.client.get(endpoint(LIST_REGIONS_ENDPOINT)).send()?;
+        Ok(raw_response.json()?)
+    }
+
+    pub fn set_running(&self, running: bool) -> anyhow::Result<()> {
+        let body = StartStopRequest { running };
+        self.client
+            .post(endpoint(START_STOP_ENDPOINT))
+            .json(&body)
+            .send()?;
+        Ok(())
+    }
+}
+
+fn endpoint(endpoint: &str) -> String {
+    format!("http://localhost:{PARTITIONNER_PORT}{endpoint}")
 }

@@ -1,10 +1,7 @@
 use crate::selection::{SceneMouse, SelectableSceneObject, SelectionShape};
 
-use crate::MainCamera;
 use bevy::prelude::*;
 use bevy_rapier::prelude::*;
-use bevy_rapier::rapier::{geometry::Ray, math::Vector};
-use steadyum_api_types::queries::{RayCastQuery, RayCastResponse};
 
 #[cfg(feature = "dim2")]
 pub fn update_hovered_entity(
@@ -12,7 +9,7 @@ pub fn update_hovered_entity(
     mut scene_mouse: ResMut<SceneMouse>,
     keyboard: Res<Input<KeyCode>>,
     physics: Res<RapierContext>,
-    camera: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
+    camera: Query<(&GlobalTransform, &Camera), With<crate::MainCamera>>,
     gizmo_shapes: Query<(Entity, &GlobalTransform, &SelectionShape)>,
     visibility: Query<&ComputedVisibility>,
 ) {
@@ -81,44 +78,6 @@ pub fn update_hovered_entity(
                 true
             },
         );
-        dbg!(topmost_id);
-
-        if keyboard.pressed(KeyCode::LControl) && scene_mouse.hovered.is_none() {
-            let region_list = db_context.region_list.read().unwrap();
-            let client = reqwest::blocking::Client::new();
-
-            for region_port in &region_list.ports {
-                println!("Querying {}", region_port);
-                let query = RayCastQuery {
-                    ray: Ray::new(point.into(), Vector::y()),
-                };
-                let body = serde_json::to_string(&query).unwrap();
-                let response = client
-                    .get(format!("http://localhost:{}/raycast", region_port))
-                    .header(reqwest::header::CONTENT_TYPE, "application/json")
-                    .body(body)
-                    .timeout(Duration::from_millis(500))
-                    .send();
-
-                if let Ok(resp) = response {
-                    if let Ok(resp_str) = resp.text() {
-                        if let Ok(hit) = serde_json::from_str::<RayCastResponse>(&resp_str) {
-                            if hit.toi == 0.0 {
-                                if let Some(entity) = hit
-                                    .hit
-                                    .and_then(|uuid| db_context.uuid2rb.get(&uuid))
-                                    .and_then(|h| physics.rigid_body_entity(*h))
-                                {
-                                    dbg!("Set hovered");
-                                    scene_mouse.hovered =
-                                        Some(SelectableSceneObject::Collider(entity, point));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 

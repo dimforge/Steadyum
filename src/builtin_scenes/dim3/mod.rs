@@ -1,5 +1,4 @@
 use crate::builtin_scenes::BuiltinScene;
-use bevy_rapier::plugin::RapierContext;
 use std::cmp::Ordering;
 
 mod killing_runners3;

@@ -1,3 +1,4 @@
+use crate::simulation::SimulationBounds;
 use serde::Serialize;
 use uuid::Uuid;
 use zenoh::prelude::sync::Config;
@@ -31,4 +32,8 @@ pub fn put_json(publisher: &Publisher, elt: &impl Serialize) -> anyhow::Result<(
 
 pub fn runner_zenoh_commands_key(uuid: Uuid) -> String {
     format!("runner/{}", uuid.to_string())
+}
+
+pub fn runner_zenoh_ack_key(region: &SimulationBounds) -> String {
+    format!("ack/{}", region.to_string())
 }

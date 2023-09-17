@@ -4,8 +4,11 @@ use crate::runner::SimulationState;
 use crate::watch::WatchedObject;
 use rapier::prelude::*;
 use std::collections::HashMap;
-use steadyum_api_types::messages::{ObjectAssignment, PartitionnerMessage};
-use steadyum_api_types::objects::WarmBodyObject;
+use steadyum_api_types::messages::{
+    BodyAssignment, ObjectAssignment, PartitionnerMessage, RunnerMessage,
+};
+use steadyum_api_types::objects::{ColdBodyObject, WarmBodyObject};
+use steadyum_api_types::region_db::PartitionnerServer;
 use steadyum_api_types::simulation::SimulationBounds;
 use steadyum_api_types::zenoh::put_json;
 
@@ -64,24 +67,35 @@ pub fn calculate_region_assignments(
 pub fn apply_and_send_region_assignments(
     sim_state: &mut SimulationState,
     assignments: &RegionAssignments,
-    neighbors: &Neighbors,
+    neighbors: &mut Neighbors,
+    db_context: &PartitionnerServer,
 ) -> anyhow::Result<()> {
-    let runner_zenoh_key = sim_state.sim_bounds.zenoh_queue_key();
-
     for (new_region, handles) in &assignments.bodies_to_reassign {
-        for handle in handles {
-            let body = &sim_state.bodies[*handle];
-            let warm_object = WarmBodyObject::from_body(body, sim_state.step_id);
-
-            // Switch region.
-            let partitionner_message = PartitionnerMessage::AssignObjectTo {
-                uuid: sim_state.body2uuid[&handle].clone(),
-                origin: runner_zenoh_key.clone(),
-                target: *new_region,
-                warm_object,
-            };
-            put_json(&neighbors.partitionner, &partitionner_message)?;
+        if handles.is_empty() {
+            continue;
         }
+
+        let neighbor = neighbors.fetch_or_spawn_neighbor(db_context, *new_region);
+
+        let body_assignments = handles
+            .iter()
+            .map(|handle| {
+                let body = &sim_state.bodies[*handle];
+                let collider = &sim_state.colliders[body.colliders()[0]];
+                let uuid = sim_state.body2uuid[handle];
+                let warm = WarmBodyObject::from_body(body, sim_state.step_id);
+                let cold = ColdBodyObject::from_body_collider(body, collider);
+                BodyAssignment { uuid, warm, cold }
+            })
+            .collect();
+
+        // Switch region.
+        let message = RunnerMessage::AssignIsland {
+            bodies: body_assignments,
+            impulse_joints: vec![],
+        };
+
+        neighbor.send(&message)?;
     }
 
     for handle in assignments

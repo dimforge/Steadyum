@@ -243,7 +243,7 @@ fn spawn_preview_entity(
     };
 
     commands
-        .spawn_bundle(polyline)
+        .spawn(polyline)
         .insert(InsertionPreview)
         .insert(Visibility { is_visible: false });
 }
@@ -251,7 +251,7 @@ fn spawn_preview_entity(
 #[cfg(feature = "dim2")]
 fn spawn_preview_entity(mut commands: Commands) {
     commands
-        .spawn_bundle(preview_shape_bundle(Vect::ONE, Color::WHITE))
+        .spawn(preview_shape_bundle(Vect::ONE, Color::WHITE))
         .insert(InsertionPreview)
         .insert(Visibility { is_visible: false });
 }

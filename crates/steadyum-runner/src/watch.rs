@@ -26,7 +26,6 @@ impl WatchedObject {
 
 pub fn set_watched_sets(
     watched: Vec<(WatchedObjects, SimulationBounds)>,
-    watched_objects: &mut HashMap<RigidBodyHandle, WatchedObject>,
     sim_state: &mut SimulationState,
     watch_iteration_id: usize,
 ) {
@@ -39,7 +38,7 @@ pub fn set_watched_sets(
                 .get(&uuid)
                 .and_then(|h| sim_state.bodies.get_mut(*h).map(|rb| (h, rb)))
             {
-                if !watched_objects.contains_key(rb_handle) {
+                if !sim_state.watched_objects.contains_key(rb_handle) {
                     continue;
                 }
 
@@ -69,12 +68,14 @@ pub fn set_watched_sets(
                 rb_handle
             };
 
-            watched_objects.insert(rb_handle, WatchedObject::new(region, watch_iteration_id));
+            sim_state
+                .watched_objects
+                .insert(rb_handle, WatchedObject::new(region, watch_iteration_id));
         }
     }
 
     // Remove all obsolete watched objects.
-    watched_objects.retain(|handle, watched| {
+    sim_state.watched_objects.retain(|handle, watched| {
         if watched.watch_iteration_id != watch_iteration_id {
             sim_state.bodies.remove(
                 *handle,

@@ -2,12 +2,10 @@ use crate::MainCamera;
 use bevy::prelude::*;
 use bevy_rapier::control::{KinematicCharacterController, KinematicCharacterControllerOutput};
 use bevy_rapier::geometry::Collider;
-use bevy_rapier::math::{Real, Vect};
+use bevy_rapier::math::Vect;
 use bevy_rapier::plugin::RapierConfiguration;
 use bevy_rapier::prelude::RapierContext;
-use bevy_rapier::rapier;
-use bevy_rapier::rapier::math::{Point, Vector};
-use steadyum_api_types::kinematic::{KinematicAnimations, KinematicCurve};
+use steadyum_api_types::kinematic::KinematicAnimations;
 
 pub struct ControlPlugin;
 
@@ -44,7 +42,7 @@ pub fn control_characters(
         &mut CharacterControlOptions,
         &KinematicCharacterControllerOutput,
     )>,
-    mut cameras: Query<&GlobalTransform, With<MainCamera>>,
+    cameras: Query<&GlobalTransform, With<MainCamera>>,
 ) {
     if !config.physics_pipeline_active {
         return;
@@ -72,8 +70,8 @@ pub fn control_characters(
             #[cfg(feature = "dim2")]
             let mut speed = collider_aabb.extents().x / 5.0 * inv_dt;
             #[cfg(feature = "dim3")]
-            let mut speed = collider_aabb.extents().xz().norm() / 5.0 * inv_dt;
-            let mut y_speed = (collider_aabb.extents().y / 30.0).max(0.1) * inv_dt;
+            let speed = collider_aabb.extents().xz().norm() / 5.0 * inv_dt;
+            let y_speed = (collider_aabb.extents().y / 30.0).max(0.1) * inv_dt;
 
             #[cfg(feature = "dim2")]
             for key in events.get_pressed() {

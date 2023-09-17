@@ -60,6 +60,7 @@ pub struct WatchedObjects {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct RegionList {
+    // TODO: replace by the uuid?
     pub keys: Vec<String>,
     pub ports: Vec<u32>,
 }
