@@ -2,17 +2,19 @@ use crate::selection::SceneMouse;
 
 use crate::MainCamera;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 
 pub fn track_mouse_state(
-    windows: Res<Windows>,
     mut scene_mouse: ResMut<SceneMouse>,
+    windows: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
-    if let Some(window) = windows.get_primary() {
+    if let Ok(window) = windows.get_single() {
         for (camera_transform, camera) in camera.iter() {
             if let Some(cursor) = window.cursor_position() {
-                let ndc_cursor =
-                    (cursor / Vec2::new(window.width(), window.height()) * 2.0) - Vec2::ONE;
+                let ndc_cursor = ((cursor / Vec2::new(window.width(), window.height()) * 2.0)
+                    - Vec2::ONE)
+                    * Vec2::new(1.0, -1.0);
                 let ndc_to_world =
                     camera_transform.compute_matrix() * camera.projection_matrix().inverse();
                 let ray_pt1 =

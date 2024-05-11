@@ -2,9 +2,10 @@ use crate::selection::Selection;
 use crate::utils::{ColliderComponentsMut, RigidBodyComponentsMut};
 use bevy::app::AppExit;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use bevy_egui::{
     egui::{self, Color32, FontData, FontDefinitions, FontFamily, RichText},
-    EguiContext,
+    EguiContexts,
 };
 use bevy_rapier::control::KinematicCharacterController;
 use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
@@ -17,13 +18,13 @@ use crate::cli::CliArgs;
 use crate::control::CharacterControlOptions;
 use crate::operation::Operations;
 use crate::styling::Theme;
-pub(self) use gizmo::add_missing_gizmos;
+// pub(self) use gizmo::add_missing_gizmos;
 pub(self) use input_blocking::focus_ui;
 pub(self) use keyboard::handle_keyboard_inputs;
 pub use ui_state::{ActiveMouseAction, SelectedTool, UiState};
 
 mod debug_render;
-mod gizmo;
+// mod gizmo;
 mod input_blocking;
 mod keyboard;
 mod main_menu;
@@ -140,7 +141,7 @@ impl ButtonTexture {
 }
 
 pub fn load_assets(
-    mut ui_context: ResMut<EguiContext>,
+    mut ui_context: EguiContexts,
     _ui_state: ResMut<UiState>,
     _assets: Res<AssetServer>,
 ) {
@@ -159,15 +160,15 @@ pub fn load_assets(
 
 pub fn update_ui(
     mut commands: Commands,
-    (windows, cli): (Res<Windows>, Res<CliArgs>),
-    mut theme: ResMut<Theme>,
-    mut ui_context: ResMut<EguiContext>,
+    (cli, mut theme): (Res<CliArgs>, ResMut<Theme>),
+    mut ui_context: EguiContexts,
     mut ui_state: ResMut<UiState>,
     mut debug_render_context: ResMut<DebugRenderContext>,
     mut physics_context: ResMut<RapierContext>,
     mut physics_config: ResMut<RapierConfiguration>,
     mut operations: ResMut<Operations>,
     exit: EventWriter<AppExit>,
+    windows: Query<&Window, With<PrimaryWindow>>,
     mut bodies: Query<RigidBodyComponentsMut>,
     mut colliders: Query<ColliderComponentsMut>,
     mut character_controllers: Query<(
@@ -178,7 +179,7 @@ pub fn update_ui(
     mut visibility: Query<(Entity, &mut Visibility)>,
     mut transforms: Query<(Entity, &mut Transform)>,
 ) {
-    if let Some(window) = windows.get_primary() {
+    if let Ok(window) = windows.get_single() {
         main_menu::ui(
             window,
             &mut theme,

@@ -2,10 +2,13 @@ use crate::operation::Operation;
 use crate::ui::SelectedTool;
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
+use bevy_prototype_lyon::draw::Stroke;
+use bevy_prototype_lyon::entity::ShapeBundle;
 use bevy_rapier::dynamics::RigidBody;
 use bevy_rapier::rapier::math::DIM;
 use bevy_rapier::{geometry::Collider, math::Vect};
 
+use crate::render::RenderSystems;
 use crate::utils::{ColliderBundle, RigidBodyBundle};
 #[cfg(feature = "dim3")]
 use bevy_polyline::prelude::*;
@@ -220,9 +223,15 @@ pub struct InsertionPlugin;
 impl Plugin for InsertionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(InsertionState::default())
-            .add_startup_system(spawn_preview_entity)
-            .add_system(mouse::handle_insertion_click)
-            .add_system(mouse::update_preview_scale);
+            .add_systems(Startup, spawn_preview_entity)
+            .add_systems(
+                Update,
+                mouse::handle_insertion_click.in_set(RenderSystems::BeforeCommands),
+            )
+            .add_systems(
+                Update,
+                mouse::update_preview_scale.in_set(RenderSystems::BeforeCommands),
+            );
     }
 }
 
@@ -245,7 +254,7 @@ fn spawn_preview_entity(
     commands
         .spawn(polyline)
         .insert(InsertionPreview)
-        .insert(Visibility { is_visible: false });
+        .insert(Visibility::Hidden);
 }
 
 #[cfg(feature = "dim2")]
@@ -253,12 +262,18 @@ fn spawn_preview_entity(mut commands: Commands) {
     commands
         .spawn(preview_shape_bundle(Vect::ONE, Color::WHITE))
         .insert(InsertionPreview)
-        .insert(Visibility { is_visible: false });
+        .insert(Visibility::Hidden);
 }
 
 #[cfg(feature = "dim2")]
-pub fn preview_shape_bundle(scale: Vect, color: Color) -> bevy_prototype_lyon::entity::ShapeBundle {
-    use bevy_prototype_lyon::prelude::{DrawMode, GeometryBuilder, StrokeMode};
+pub fn preview_shape_bundle(
+    scale: Vect,
+    color: Color,
+) -> (
+    bevy_prototype_lyon::entity::ShapeBundle,
+    bevy_prototype_lyon::prelude::Stroke,
+) {
+    use bevy_prototype_lyon::prelude::{GeometryBuilder, ShapeBundle, Stroke};
 
     let polyline = crate::styling::cuboid_polyline();
     let polygon = bevy_prototype_lyon::shapes::Polygon {
@@ -266,9 +281,11 @@ pub fn preview_shape_bundle(scale: Vect, color: Color) -> bevy_prototype_lyon::e
         closed: true,
     };
 
-    GeometryBuilder::build_as(
-        &polygon,
-        DrawMode::Stroke(StrokeMode::new(color, 0.01)),
-        Transform::default(),
+    (
+        ShapeBundle {
+            path: GeometryBuilder::build_as(&polygon),
+            ..default()
+        },
+        Stroke::new(color, 0.01),
     )
 }

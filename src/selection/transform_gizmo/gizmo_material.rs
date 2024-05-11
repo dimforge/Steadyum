@@ -1,8 +1,7 @@
-use bevy::pbr::MaterialPipelineKey;
 use bevy::{
-    pbr::MaterialPipeline,
+    pbr::{MaterialPipeline, MaterialPipelineKey},
     prelude::*,
-    reflect::TypeUuid,
+    reflect::TypePath,
     render::{
         mesh::MeshVertexBufferLayout,
         render_resource::{
@@ -11,8 +10,7 @@ use bevy::{
     },
 };
 
-pub const GIZMO_SHADER_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 13953800272683943019);
+pub const GIZMO_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(13953800272683943019);
 
 #[derive(Component, Clone)]
 #[cfg(feature = "dim2")]
@@ -28,12 +26,12 @@ pub struct GizmoStateMaterials {
     pub hovered: Handle<GizmoMaterial>,
 }
 
-#[derive(Debug, Clone, Default, TypeUuid, AsBindGroup)]
-#[uuid = "674139bc-f374-4c3e-a935-9eee5f064ad2"]
+#[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct GizmoMaterial {
     #[uniform(0)]
     pub color: Color,
 }
+
 impl From<Color> for GizmoMaterial {
     fn from(color: Color) -> Self {
         GizmoMaterial { color }
@@ -41,16 +39,16 @@ impl From<Color> for GizmoMaterial {
 }
 
 impl Material for GizmoMaterial {
-    fn fragment_shader() -> ShaderRef {
-        ShaderRef::Handle(GIZMO_SHADER_HANDLE.typed())
+    fn vertex_shader() -> ShaderRef {
+        GIZMO_SHADER_HANDLE.into()
     }
 
-    fn vertex_shader() -> ShaderRef {
-        ShaderRef::Handle(GIZMO_SHADER_HANDLE.typed())
+    fn fragment_shader() -> ShaderRef {
+        GIZMO_SHADER_HANDLE.into()
     }
 
     fn alpha_mode(&self) -> AlphaMode {
-        AlphaMode::Blend
+        AlphaMode::Opaque
     }
 
     fn specialize(

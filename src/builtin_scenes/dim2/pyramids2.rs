@@ -2,7 +2,6 @@ use crate::builtin_scenes::BuiltinScene;
 use bevy_rapier::prelude::RapierContext;
 use bevy_rapier2d::rapier::prelude::*;
 use std::collections::HashMap;
-use steadyum_api_types::kinematic::{KinematicAnimations, KinematicCurve};
 
 fn create_wall(
     bodies: &mut RigidBodySet,
@@ -35,7 +34,6 @@ pub fn init_world() -> BuiltinScene {
      * World
      */
     let mut result = RapierContext::default();
-    let mut animations = HashMap::default();
 
     /*
      * Create the pyramids.
@@ -64,22 +62,8 @@ pub fn init_world() -> BuiltinScene {
             result
                 .colliders
                 .insert_with_parent(collider, ground_handle, &mut result.bodies);
-
-            // let ground_animation = KinematicAnimations {
-            //     linear: Some(KinematicCurve {
-            //         control_points: vec![vector![x, y], vector![x, y + 1.0]],
-            //         t0: 0.0,
-            //         total_time: 16.0,
-            //         loop_back: true,
-            //     }),
-            //     angular: None,
-            // };
-            // animations.insert(ground_handle, ground_animation);
         }
     }
 
-    BuiltinScene {
-        context: result,
-        animations,
-    }
+    BuiltinScene { context: result }
 }

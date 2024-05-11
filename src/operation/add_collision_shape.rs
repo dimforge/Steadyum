@@ -10,6 +10,7 @@ pub fn add_collision_shape(
 ) {
     for op in operations.iter() {
         if let Operation::AddCollider(collider, rigid_body, transform) = op {
+            println!(">>>>>>>>>>> Adding collider?");
             commands
                 .spawn(collider.clone())
                 .insert(rigid_body.clone())

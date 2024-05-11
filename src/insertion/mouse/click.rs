@@ -37,7 +37,7 @@ pub fn handle_insertion_click(
         reset = true;
     }
 
-    if keyboard.pressed(KeyCode::LShift) {
+    if keyboard.pressed(KeyCode::ShiftLeft) {
         insertion_state.unlocked_scaling = true;
     } else {
         insertion_state.unlocked_scaling = false;
@@ -66,7 +66,7 @@ pub fn handle_insertion_click(
                         insertion_state.set_tool(ui_state.selected_tool);
                         commands
                             .entity(preview_entity)
-                            .insert(Visibility { is_visible: true })
+                            .insert(Visibility::Visible)
                             .insert(insertion_state.transform())
                             .insert(GlobalTransform::default());
                     } else {
@@ -122,7 +122,7 @@ pub fn handle_insertion_click(
                         insertion_state.set_tool(ui_state.selected_tool);
                         commands
                             .entity(preview_entity)
-                            .insert(Visibility { is_visible: true })
+                            .insert(Visibility::Visible)
                             .insert(insertion_state.transform())
                             .insert(GlobalTransform::default());
                     } else {
@@ -144,6 +144,7 @@ pub fn handle_insertion_click(
         }
 
         if mouse.just_released(MouseButton::Left) {
+            dbg!("Here");
             match insertion_state.step {
                 Some(InsertionStep::Basis) => {
                     if insertion_state.intersects_environment
@@ -184,8 +185,6 @@ pub fn handle_insertion_click(
             *mouse_action = ActiveMouseAction::None;
         }
         insertion_state.step = None;
-        commands
-            .entity(preview_entity)
-            .insert(Visibility { is_visible: false });
+        commands.entity(preview_entity).insert(Visibility::Hidden);
     }
 }

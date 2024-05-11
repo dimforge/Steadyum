@@ -1,9 +1,9 @@
 use crate::ui::UiState;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::{egui, EguiContexts};
 use bevy_rapier::plugin::RapierContext;
 use bevy_rapier::rapier::counters::Counters;
 
-pub(super) fn ui(ui_context: &mut EguiContext, ui_state: &mut UiState, physics: &RapierContext) {
+pub(super) fn ui(ui_context: &mut EguiContexts, ui_state: &mut UiState, physics: &RapierContext) {
     egui::Window::new("ℹ Simulation infos")
         .open(&mut ui_state.simulation_infos_open)
         .resizable(false)

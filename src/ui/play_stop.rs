@@ -1,7 +1,7 @@
 use crate::cli::CliArgs;
 use bevy::window::Window;
 use bevy_egui::egui::PointerButton;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::{egui, EguiContexts};
 use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
 
 use super::{ButtonTexture, UiState};
@@ -9,7 +9,7 @@ use super::{ButtonTexture, UiState};
 pub(super) fn ui(
     window: &Window,
     cli: &CliArgs,
-    ui_context: &mut EguiContext,
+    ui_context: &mut EguiContexts,
     ui_state: &mut UiState,
     _physics_context: &mut RapierContext,
     physics_config: &mut RapierConfiguration,

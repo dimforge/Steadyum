@@ -47,7 +47,7 @@ pub fn update_preview_scale(
 
                 commands
                     .entity(preview_entity)
-                    .insert_bundle(new_preview)
+                    .insert(new_preview)
                     .insert(transform);
             }
             _ => {}

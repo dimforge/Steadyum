@@ -6,9 +6,16 @@ use bevy_rapier::rapier::math::{Point, Real, Vector};
 use na::{point, UnitQuaternion};
 
 use crate::cli::CliArgs;
-use crate::storage::External;
+use crate::parry::shape::Cuboid;
 #[cfg(feature = "dim2")]
 use bevy::sprite::MaterialMesh2dBundle;
+use bevy_egui::egui::ahash::HashMap;
+
+#[derive(Resource, Default, Clone)]
+pub struct CollisionShapeMeshInstances {
+    cuboid_to_mesh: Vec<(Cuboid, Handle<Mesh>)>, // TODO: make this work for all collider types.
+    color_to_material: Vec<(Color, Handle<StandardMaterial>)>,
+}
 
 pub fn add_collider_render_targets(
     mut commands: Commands,
@@ -21,10 +28,14 @@ pub fn add_collider_render_targets(
     }
 }
 
+#[derive(Component, Copy, Clone)]
+pub struct RenderInitialized;
+
 /// System responsible for attaching a PbrBundle to each entity having a collider.
 pub fn create_collider_renders_system(
     mut commands: Commands,
     cli: Res<CliArgs>,
+    mut instances: ResMut<CollisionShapeMeshInstances>,
     mut meshes: ResMut<Assets<Mesh>>,
     #[cfg(feature = "dim2")] mut materials: ResMut<Assets<ColorMaterial>>,
     #[cfg(feature = "dim3")] mut materials: ResMut<Assets<StandardMaterial>>,
@@ -34,35 +45,20 @@ pub fn create_collider_renders_system(
             &Collider,
             &ColliderRender,
             &mut ColliderRenderTargets,
+            Changed<Collider>,
+            Changed<ColliderRender>,
         ),
-        Or<(Changed<Collider>, Changed<ColliderRender>)>,
-    >,
-    mut external_coll_shape_render: Query<
-        (
-            Entity,
-            &External<Collider>,
-            &ColliderRender,
-            &mut ColliderRenderTargets,
-        ),
-        (
-            Or<(Changed<External<Collider>>, Changed<ColliderRender>)>,
-            Without<Collider>,
-        ),
+        Or<(Changed<ColliderRender>, Without<RenderInitialized>)>,
+        // Or<(Changed<Collider>, Changed<ColliderRender>)>,
     >,
     existing_entities: Query<Entity>,
     old_transform: Query<&Transform>, // FIXME: we shouldn’t need this, but right now collider renders get triggered each frame for some reasons.
 ) {
-    for (entity, collider, render, mut render_target) in coll_shape_render.iter_mut().chain(
-        external_coll_shape_render
-            .iter_mut()
-            .map(|(e, c, cr, trgt)| (e, &c.0, cr, trgt)),
-    ) {
+    for (entity, collider, render, mut render_target, ch1, ch2) in coll_shape_render.iter_mut() {
+        commands.entity(entity).insert(RenderInitialized); // FIXME: not sure what this is needed. Change detection for Changed<ColliderRender> should be enough.
         if let Some(mesh) =
-            generate_collision_shape_render_mesh(cli.lower_graphics, collider, &mut *meshes)
+            generate_collision_shape_render_mesh(collider, &mut *meshes, &mut instances)
         {
-            let mut material: StandardMaterial = render.color.into();
-            material.double_sided = true;
-
             // println!("Rendering with color: {:?}", render.color);
 
             #[cfg(feature = "dim2")]
@@ -106,10 +102,22 @@ pub fn create_collider_renders_system(
             };
 
             #[cfg(feature = "dim3")]
-            let mut bundle = PbrBundle {
-                mesh,
-                material: materials.add(material),
-                ..Default::default()
+            let mut bundle = {
+                let mut material: StandardMaterial = render.color.into();
+                material.double_sided = true;
+
+                let material_handle = instances
+                    .color_to_material
+                    .iter()
+                    .find(|(c, _)| *c == render.color)
+                    .map(|(_, m)| m.clone())
+                    .unwrap_or_else(|| materials.add(material));
+
+                PbrBundle {
+                    mesh,
+                    material: material_handle,
+                    ..Default::default()
+                }
             };
 
             if let Some(target) = render_target.target {
@@ -130,20 +138,31 @@ pub fn create_collider_renders_system(
 
 #[cfg(feature = "dim3")]
 fn generate_collision_shape_render_mesh(
-    lower_graphics: bool,
     collider: &Collider,
     meshes: &mut Assets<Mesh>,
+    instances: &mut CollisionShapeMeshInstances,
 ) -> Option<Handle<Mesh>> {
     const NSUB: u32 = 20;
 
     let ((vertices, indices), flat_normals) = match collider.as_unscaled_typed_shape() {
         ColliderView::Cuboid(s) => {
-            if lower_graphics {
-                // INSTANCED
-                return None;
-            } else {
-                (s.raw.to_trimesh(), true)
+            if let Some((_, mesh)) = instances
+                .cuboid_to_mesh
+                .iter()
+                .find(|(cuboid, _)| cuboid == s.raw)
+            {
+                return Some(mesh.clone());
             }
+
+            let (vertices, indices) = s.raw.to_trimesh();
+            let mesh = gen_bevy_mesh(&vertices, &indices, true);
+            let handle = meshes.add(mesh);
+            instances
+                .cuboid_to_mesh
+                .push((s.raw.clone(), handle.clone()));
+            return Some(handle);
+
+            // (s.raw.to_trimesh(), true)
         }
         ColliderView::Ball(s) => (s.raw.to_trimesh(NSUB, NSUB / 2), false),
         ColliderView::Cylinder(s) => {
@@ -212,22 +231,14 @@ fn generate_collision_shape_render_mesh(
 
 #[cfg(feature = "dim2")]
 fn generate_collision_shape_render_mesh(
-    lower_graphics: bool,
     collider: &Collider,
     meshes: &mut Assets<Mesh>,
+    _unused: &mut CollisionShapeMeshInstances,
 ) -> Option<Handle<Mesh>> {
     const NSUB: u32 = 20;
 
     let (vertices, indices) = match collider.as_unscaled_typed_shape() {
-        ColliderView::Cuboid(s) => {
-            if lower_graphics {
-                // INSTANCED
-                // return None;
-                (s.raw.to_polyline(), None)
-            } else {
-                (s.raw.to_polyline(), None)
-            }
-        }
+        ColliderView::Cuboid(s) => (s.raw.to_polyline(), None),
         ColliderView::Ball(s) => (s.raw.to_polyline(NSUB), None),
         ColliderView::Capsule(s) => (s.raw.to_polyline(NSUB), None),
         // ColliderView::ConvexPolygon(s) => (s.raw.to_polyline(), None),

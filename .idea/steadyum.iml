@@ -6,6 +6,8 @@
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/steadyum-api-types/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/crates/steadyum-partitionner/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/steadyum-updater/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/crates/steadyum-distributed/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
     </content>
     <orderEntry type="inheritedJdk" />

@@ -7,15 +7,15 @@ impl Plugin for FloorPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "dim3")]
         {
-            app.add_plugin(InfiniteGridPlugin)
-                .add_startup_system(setup_floor);
+            app.add_plugins(InfiniteGridPlugin)
+                .add_systems(Startup, setup_floor);
         }
     }
 }
 
 fn setup_floor(mut commands: Commands, _meshes: ResMut<Assets<Mesh>>) {
     commands.spawn(InfiniteGridBundle {
-        grid: InfiniteGrid {
+        settings: InfiniteGridSettings {
             shadow_color: None,
             fadeout_distance: 500.0,
             dot_fadeout_strength: 0.1,

@@ -4,7 +4,7 @@ use crate::selection::Selection;
 use crate::utils::{ColliderComponentsMut, RigidBodyComponentsMut};
 use bevy::prelude::*;
 use bevy::window::Window;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::{egui, EguiContexts};
 use bevy_rapier::prelude::*;
 
 use super::{OpenObjectTab, UiState};
@@ -13,7 +13,7 @@ pub(super) fn ui(
     commands: &mut Commands,
     _window: &Window,
     cli: &CliArgs,
-    ui_context: &mut EguiContext,
+    ui_context: &mut EguiContexts,
     ui_state: &mut UiState,
     _physics_context: &mut RapierContext,
     _physics_config: &mut RapierConfiguration,
@@ -96,12 +96,14 @@ fn scene_explorer(
 
                     let is_visible = visibility
                         .get(entity)
-                        .map(|v| v.1.is_visible)
+                        .map(|v| v.1 == Visibility::Visible)
                         .unwrap_or(true);
                     let visibility_icon = if is_visible { "🌑" } else { "🌕" };
                     if ui.button(visibility_icon).clicked() {
-                        commands.entity(entity).insert(Visibility {
-                            is_visible: !is_visible,
+                        commands.entity(entity).insert(if is_visible {
+                            Visibility::Hidden
+                        } else {
+                            Visibility::Visible
                         });
 
                         if is_visible {
@@ -377,7 +379,9 @@ fn selection_inspector(
                     if let Some(read_mass_props) = read_mass_props {
                         let mut mprops = *read_mass_props;
                         ui.label("Mass");
-                        ui.add(egui::DragValue::new(&mut mprops.0.mass));
+                        let mut mass = mprops.mass;
+                        ui.add(egui::DragValue::new(&mut mass));
+                        // TODO: apply the modification if modified.
                         ui.end_row();
                     }
                 });

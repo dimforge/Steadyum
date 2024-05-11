@@ -6,14 +6,14 @@ pub struct RapierUiPlugin;
 
 impl Plugin for RapierUiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(bevy_egui::EguiPlugin)
+        app.add_plugins(bevy_egui::EguiPlugin)
             // .add_plugins(bevy_mod_picking::DefaultPickingPlugins)
             .insert_resource(UiState::default())
             .insert_resource(ActiveMouseAction::None)
-            .add_startup_system(super::load_assets)
-            .add_system_to_stage(CoreStage::PreUpdate, super::focus_ui)
-            .add_system(super::add_missing_gizmos)
-            .add_system(super::update_ui)
-            .add_system(super::handle_keyboard_inputs);
+            .add_systems(Startup, super::load_assets)
+            .add_systems(PreUpdate, super::focus_ui)
+            // .add_systems(Update, super::add_missing_gizmos)
+            .add_systems(Update, super::update_ui)
+            .add_systems(Update, super::handle_keyboard_inputs);
     }
 }

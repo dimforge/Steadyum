@@ -6,6 +6,11 @@ extern crate nalgebra as na;
 
 pub use bevy_rapier::parry;
 pub use bevy_rapier::rapier;
+use smooth_bevy_cameras::{
+    controllers::unreal::{UnrealCameraBundle, UnrealCameraController, UnrealCameraPlugin},
+    LookTransformPlugin,
+};
+use std::future::Future;
 
 use crate::camera::{OrbitCamera, OrbitCameraPlugin};
 use crate::cli::CliArgs;
@@ -15,10 +20,11 @@ use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::prelude::*;
 use bevy::render::camera::Projection;
 use bevy::render::view::RenderLayers;
-use bevy::window::WindowId;
 use bevy::winit::WinitWindows;
 use bevy_egui::egui::Visuals;
-use bevy_infinite_grid::GridShadowCamera;
+use winit::window::WindowId;
+// use bevy_infinite_grid::GridShadowCamera;
+use bevy_rapier::prelude::Real;
 use bevy_rapier::prelude::*;
 use clap::Parser;
 use winit::window::Icon;
@@ -32,11 +38,6 @@ mod selection;
 mod styling;
 mod ui;
 mod utils;
-
-mod storage;
-
-// Workaround for bevy’s lack of visibility propagation from an entity to its children.
-mod propagate_visibility;
 
 mod builtin_scenes;
 mod cli;
@@ -57,7 +58,7 @@ pub struct PhysicsProgress {
     pub progress_limit: usize,
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, StageLabel)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub enum SteadyumStages {
     PostPhysics,
     RenderStage,
@@ -82,44 +83,39 @@ fn main() {
         .insert_resource(args)
         .insert_resource(PhysicsProgress::default())
         .add_plugins(DefaultPlugins)
-        .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
-        .add_plugin(bevy::pbr::wireframe::WireframePlugin)
-        .add_plugin(bevy_stl::StlPlugin)
-        .add_plugin(bevy_obj::ObjPlugin)
+        // .add_plugins(LogDiagnosticsPlugin::default())
+        // .add_plugins(FrameTimeDiagnosticsPlugin::default())
+        .add_plugins(bevy::pbr::wireframe::WireframePlugin)
+        // .add_plugins(bevy_stl::StlPlugin)
+        .add_plugins(bevy_obj::ObjPlugin)
         .add_plugins(selection::SelectionPlugins)
-        .add_plugin(OrbitCameraPlugin)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default().with_physics_scale(1.0))
-        .add_plugin(RapierDebugRenderPlugin::default().disabled())
-        .add_plugin(render::RapierRenderPlugin)
-        .add_plugin(ui::RapierUiPlugin)
-        .add_plugin(styling::StylingPlugin)
-        .add_plugin(operation::RapierOperationsPlugin)
-        // .add_plugin(bevy_prototype_lyon::prelude::ShapePlugin)
-        .add_plugin(insertion::InsertionPlugin)
-        .add_plugin(floor::FloorPlugin)
-        .add_plugin(drag::DragPlugin)
-        .add_plugin(projectile::ProjectilePlugin)
-        .add_plugin(control::ControlPlugin)
-        .add_stage_after(
-            PhysicsStages::Writeback,
-            SteadyumStages::PostPhysics,
-            SystemStage::parallel(),
-        )
+        .add_plugins(LookTransformPlugin)
+        .add_plugins(UnrealCameraPlugin::default())
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default().with_physics_scale(1.0))
+        .add_plugins(RapierDebugRenderPlugin::default().disabled())
+        .add_plugins(render::RapierRenderPlugin)
+        .add_plugins(ui::RapierUiPlugin)
+        .add_plugins(styling::StylingPlugin)
+        .add_plugins(operation::RapierOperationsPlugin)
+        // .add_plugins(bevy_prototype_lyon::prelude::ShapePlugin)
+        .add_plugins(insertion::InsertionPlugin)
+        .add_plugins(floor::FloorPlugin)
+        .add_plugins(drag::DragPlugin)
+        .add_plugins(projectile::ProjectilePlugin)
+        .add_plugins(control::ControlPlugin)
+        .add_plugins(OrbitCameraPlugin)
+        // .add_stage_after(
+        //     PhysicsStages::Writeback,
+        //     SteadyumStages::PostPhysics,
+        //     SystemStage::parallel(),
+        // )
         // .add_startup_system(set_window_icon)
-        .add_startup_system(init_profiling_and_gravity)
-        .add_startup_system(setup_graphics)
-        .add_startup_system(setup_physics)
-        .add_system(propagate_visibility::visible_propagate_system);
+        .add_systems(Startup, init_profiling_and_gravity)
+        .add_systems(Startup, setup_graphics)
+        .add_systems(Startup, setup_physics);
 
-    if args.distributed_physics {
-        app.add_plugin(storage::StoragePlugin);
-    }
+    app.add_plugins(bevy_polyline::PolylinePlugin);
 
-    #[cfg(feature = "dim2")]
-    {
-        app.add_plugin(bevy_polyline::PolylinePlugin);
-    }
     #[cfg(feature = "voxels")]
     {
         app.add_system_to_stage(SteadyumStages::PostPhysics, handle_fractures);
@@ -138,6 +134,7 @@ fn init_profiling_and_gravity(
 }
 
 fn set_window_icon(windows: NonSendMut<WinitWindows>) {
+    /*
     let primary = windows.get_window(WindowId::primary()).unwrap();
 
     // Here we use the `image` crate to load our icon data from a png file
@@ -153,6 +150,7 @@ fn set_window_icon(windows: NonSendMut<WinitWindows>) {
 
     let icon = Icon::from_rgba(icon_rgba, icon_width, icon_height).unwrap();
     primary.set_window_icon(Some(icon));
+     */
 }
 
 #[cfg(feature = "dim2")]
@@ -189,7 +187,7 @@ fn setup_graphics(mut commands: Commands) {
                 clear_color: bevy::core_pipeline::clear_color::ClearColorConfig::None,
             },
             camera: Camera {
-                priority: GIZMO_LAYER as isize,
+                order: GIZMO_LAYER as isize,
                 ..default()
             },
             ..default()
@@ -231,14 +229,20 @@ fn setup_graphics(mut commands: Commands) {
                 .inverse(),
             ),
             projection: Projection::Perspective(PerspectiveProjection {
-                far: 10_000.0,
+                far: 100.0,
                 ..PerspectiveProjection::default()
             }),
             ..Default::default()
         })
+        // .insert(UnrealCameraBundle::new(
+        //     UnrealCameraController { ..default() },
+        //     Vec3::new(-2.0, 25.0, 5.0),
+        //     Vec3::new(0., 25.0, 0.),
+        //     Vec3::Y,
+        // ))
         .insert(orbit)
         .insert(MainCamera)
-        .insert(GridShadowCamera)
+        // .insert(GridShadowCamera)
         .insert(RenderLayers::layer(0));
 
     commands
@@ -246,9 +250,10 @@ fn setup_graphics(mut commands: Commands) {
             camera_3d: Camera3d {
                 clear_color: bevy::core_pipeline::clear_color::ClearColorConfig::None,
                 depth_load_op: bevy::core_pipeline::core_3d::Camera3dDepthLoadOp::Clear(0.),
+                ..default()
             },
             camera: Camera {
-                priority: GIZMO_LAYER as isize,
+                order: GIZMO_LAYER as isize,
                 ..default()
             },
             ..default()
@@ -287,7 +292,7 @@ pub fn setup_physics(
     config.physics_pipeline_active = false;
     config.query_pipeline_active = !cli.distributed_physics;
     debug_render_context.pipeline.style.rigid_body_axes_length = 0.5;
-    debug_render_context.always_on_top = cfg!(feature = "dim2");
+    // debug_render_context.always_on_top = cfg!(feature = "dim2");
     debug_render_context.enabled = false;
 }
 
@@ -307,8 +312,15 @@ fn handle_fractures(
                 .entity(*fragment)
                 .insert(ColliderRender::from(color))
                 // .insert(ColliderOutlineRender::new(outline_color, 0.02))
-                .insert(Visibility::default())
-                .insert(ComputedVisibility::default());
+                .insert(VisibilityBundle::default());
         }
     }
+}
+
+fn block_on<Fut: Future>(f: Fut) -> Fut::Output {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(f)
 }

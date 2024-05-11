@@ -17,7 +17,7 @@ pub fn visible_propagate_system(
         if let Some(children) = children {
             for child in children.iter() {
                 propagate_recursive(
-                    visible.is_visible,
+                    *visible == Visibility::Visible,
                     &mut visible_query,
                     &children_query,
                     *child,

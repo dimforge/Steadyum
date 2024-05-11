@@ -1,23 +1,23 @@
 use crate::builtin_scenes;
 use crate::operation::{Operation, Operations};
-use crate::storage::SaveFileData;
 use crate::styling::Theme;
 use crate::ui::{debug_render, UiState};
 use bevy::app::AppExit;
 use bevy::prelude::*;
 use bevy::window::Window;
-use bevy_egui::{egui, EguiContext};
+use bevy_egui::{egui, EguiContexts};
 use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
 use bevy_rapier::render::DebugRenderContext;
 use std::path::PathBuf;
 
+use crate::builtin_scenes::BuiltinScene;
 #[cfg(not(target_arch = "wasm32"))]
 use native_dialog::FileDialog;
 
 pub(super) fn ui(
     _window: &Window,
     theme: &mut Theme,
-    ui_context: &mut EguiContext,
+    ui_context: &mut EguiContexts,
     ui_state: &mut UiState,
     _physics_context: &mut RapierContext,
     _physics_config: &mut RapierConfiguration,
@@ -47,9 +47,9 @@ pub(super) fn ui(
                     ui.menu_button("📂 Built-in scenes", |ui| {
                         for (name, builder) in builtin_scenes::builders() {
                             if ui.button(name).clicked() {
-                                let ctxt = builder();
+                                let scene = builder();
                                 operations.push(Operation::ClearScene);
-                                operations.push(Operation::ImportScene(SaveFileData::from(ctxt)));
+                                operations.push(Operation::ImportScene(scene.context));
                             }
                         }
                     });
@@ -84,7 +84,7 @@ pub(super) fn ui(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn import_data<T: serde::Serialize>() -> anyhow::Result<Option<SaveFileData>> {
+fn import_data<T: for<'a> serde::Deserialize<'a>>() -> anyhow::Result<Option<T>> {
     if let Some(path) = FileDialog::new()
         .add_filter("Json", &["json"])
         .show_open_single_file()?

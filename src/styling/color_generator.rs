@@ -38,13 +38,14 @@ impl ColorGenerator {
             self.region_colors.resize(region + 1, None);
         }
 
+        let mut seeded_rng = oorandom::Rand32::new(region as u64 % 10);
         let color = &mut self.region_colors[region];
 
         if color.is_none() {
             *color = Some(Color::rgb(
-                self.rng.rand_float(),
-                self.rng.rand_float(),
-                self.rng.rand_float(),
+                seeded_rng.rand_float(),
+                seeded_rng.rand_float(),
+                seeded_rng.rand_float(),
             ));
         }
 

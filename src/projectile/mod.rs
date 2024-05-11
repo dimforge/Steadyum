@@ -16,7 +16,7 @@ pub struct ProjectilePlugin;
 impl Plugin for ProjectilePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ProjectileState::default())
-            .add_system(mouse::handle_projectile_click);
-        // .add_system(mouse::handle_projectile_hover);
+            .add_systems(Update, mouse::handle_projectile_click);
+        // .add_systems(Update, mouse::handle_projectile_hover);
     }
 }

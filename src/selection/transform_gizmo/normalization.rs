@@ -1,24 +1,19 @@
 use crate::MainCamera;
-use bevy::transform::transform_propagate_system;
+use bevy::transform::TransformSystem;
 use bevy::{prelude::*, render::camera::Camera};
 
-use super::{GizmoSystemsEnabledCriteria, TransformGizmoSystem};
-
-#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
-pub enum FseNormalizeSystem {
-    Normalize,
-}
+use super::{GizmoSettings, TransformGizmoSystem};
 
 pub struct Ui3dNormalization;
 impl Plugin for Ui3dNormalization {
     fn build(&self, app: &mut App) {
-        app.add_system_to_stage(
-            CoreStage::PostUpdate,
+        app.add_systems(
+            PostUpdate,
             normalize
-                .label(FseNormalizeSystem::Normalize)
-                .with_run_criteria(GizmoSystemsEnabledCriteria)
-                .before(transform_propagate_system)
-                .after(TransformGizmoSystem::Place),
+                .in_set(TransformGizmoSystem::NormalizeSet)
+                .after(TransformSystem::TransformPropagate)
+                .after(TransformGizmoSystem::Place)
+                .run_if(|settings: Res<GizmoSettings>| settings.enabled),
         );
     }
 }

@@ -8,17 +8,16 @@ pub fn import_mesh(
     asset_server: Res<AssetServer>,
     operations: Res<Operations>,
 ) {
+    let operations = &*operations;
     for op in operations.iter() {
         if let Operation::ImportMesh(path, shape) = op {
-            let handle: Handle<Mesh> = asset_server.load(path.as_path());
-            commands
-                .spawn(AsyncCollider {
-                    handle: handle.clone(),
-                    shape: shape.clone(),
-                })
-                .insert(TransformBundle::default())
-                .insert(RigidBodyBundle::fixed())
-                .insert(ColliderRenderBundle::default());
+            // let handle: Handle<Mesh> = asset_server.load(path.as_path());
+            // commands
+            //     .spawn(AsyncCollider(shape.clone()))
+            //     .insert(handle)
+            //     .insert(TransformBundle::default())
+            //     .insert(RigidBodyBundle::fixed())
+            //     .insert(ColliderRenderBundle::default());
         }
     }
 }

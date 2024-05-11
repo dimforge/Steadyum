@@ -17,7 +17,7 @@ pub struct DragPlugin;
 impl Plugin for DragPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(DragState::default())
-            .add_system(mouse::handle_drag_click)
-            .add_system(mouse::handle_drag_hover);
+            .add_systems(Update, mouse::handle_drag_click)
+            .add_systems(Update, mouse::handle_drag_hover);
     }
 }

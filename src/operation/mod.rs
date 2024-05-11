@@ -5,10 +5,10 @@ pub use self::add_collision_shape::add_collision_shape;
 pub use self::add_intersection::{add_intersection, update_intersection, PersistentIntersection};
 pub use self::add_plane::add_plane;
 pub use self::clear_scene::clear_scene;
-pub use self::import_scene::import_scene;
 
 #[cfg(feature = "dim3")]
 pub use self::import_mesh::{import_mesh, set_trimesh_flags};
+pub use self::import_scene::import_scene;
 
 mod operations;
 mod plugin;

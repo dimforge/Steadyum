@@ -43,7 +43,7 @@ pub fn handle_selection_click(
         }
 
         // Clear selection.
-        if !keyboard.pressed(KeyCode::LShift) {
+        if !keyboard.pressed(KeyCode::ShiftLeft) {
             for (_, mut selection) in selected_entities.iter_mut() {
                 selection.selected = false;
             }

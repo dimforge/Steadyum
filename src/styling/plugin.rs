@@ -61,6 +61,6 @@ impl Plugin for StylingPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(ColorGenerator::default())
             .insert_resource(Theme::default())
-            .add_system(super::dark_mode::update_dark_mode);
+            .add_systems(Update, super::dark_mode::update_dark_mode);
     }
 }

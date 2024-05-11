@@ -1,17 +1,18 @@
 use crate::selection::{SceneMouse, SelectableSceneObject, SelectionShape};
 
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 use bevy_rapier::prelude::*;
 
 #[cfg(feature = "dim2")]
 pub fn update_hovered_entity(
-    windows: Res<Windows>,
     mut scene_mouse: ResMut<SceneMouse>,
     keyboard: Res<Input<KeyCode>>,
     physics: Res<RapierContext>,
+    windows: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&GlobalTransform, &Camera), With<crate::MainCamera>>,
     gizmo_shapes: Query<(Entity, &GlobalTransform, &SelectionShape)>,
-    visibility: Query<&ComputedVisibility>,
+    visibility: Query<&ViewVisibility>,
 ) {
     use bevy::math::Vec3Swizzles;
 
@@ -19,7 +20,7 @@ pub fn update_hovered_entity(
     //     return;
     // }
 
-    if !keyboard.pressed(KeyCode::LControl) {
+    if !keyboard.pressed(KeyCode::ControlLeft) {
         scene_mouse.hovered = None;
     }
 
@@ -27,11 +28,7 @@ pub fn update_hovered_entity(
         // First, check if we are hovering a gizmo.
         let mut gizmo_hit = None;
         for (entity, transform, sel_shape) in gizmo_shapes.iter() {
-            if visibility
-                .get(entity)
-                .map(|v| v.is_visible())
-                .unwrap_or(false)
-            {
+            if visibility.get(entity).map(|v| v.get()).unwrap_or(false) {
                 let shape_shift = Transform {
                     translation: Vec3::new(sel_shape.translation.x, sel_shape.translation.y, 0.0),
                     rotation: Quat::from_rotation_z(sel_shape.rotation),
@@ -61,12 +58,8 @@ pub fn update_hovered_entity(
         let mut topmost_id = 0;
         physics.intersections_with_point(
             point,
-            QueryFilter::default().predicate(&|entity| {
-                visibility
-                    .get(entity)
-                    .map(|vis| vis.is_visible())
-                    .unwrap_or(false)
-            }),
+            QueryFilter::default()
+                .predicate(&|entity| visibility.get(entity).map(|vis| vis.get()).unwrap_or(false)),
             |entity| {
                 // NOTE: the entities with the largest ids are rendered on top of the ones
                 //       with smaller ids (because of the way the bevy_rapier debug renderer works).
@@ -86,7 +79,7 @@ pub fn update_hovered_entity(
     mut scene_mouse: ResMut<SceneMouse>,
     physics: Res<RapierContext>,
     gizmo_shapes: Query<(Entity, &GlobalTransform, &SelectionShape)>,
-    visibility: Query<&ComputedVisibility>,
+    visibility: Query<&ViewVisibility>,
 ) {
     // if !selection_state.inputs_enabled {
     //     return;
@@ -98,11 +91,7 @@ pub fn update_hovered_entity(
         // First, check if we are hovering a gizmo.
         let mut gizmo_hit = None;
         for (entity, transform, sel_shape) in gizmo_shapes.iter() {
-            if visibility
-                .get(entity)
-                .map(|v| v.is_visible())
-                .unwrap_or(false)
-            {
+            if visibility.get(entity).map(|v| v.get()).unwrap_or(false) {
                 let shape_shift = Transform {
                     translation: sel_shape.translation,
                     rotation: sel_shape.rotation,
@@ -148,10 +137,7 @@ pub fn update_hovered_entity(
                 f32::MAX,
                 false,
                 QueryFilter::default().predicate(&|entity| {
-                    visibility
-                        .get(entity)
-                        .map(|vis| vis.is_visible())
-                        .unwrap_or(false)
+                    visibility.get(entity).map(|vis| vis.get()).unwrap_or(false)
                 }),
             )
             .map(|(entity, inter)| SelectableSceneObject::Collider(entity, inter));

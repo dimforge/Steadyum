@@ -5,7 +5,6 @@ use bevy_rapier::geometry::Collider;
 use bevy_rapier::math::Vect;
 use bevy_rapier::plugin::RapierConfiguration;
 use bevy_rapier::prelude::RapierContext;
-use steadyum_api_types::kinematic::KinematicAnimations;
 
 pub struct ControlPlugin;
 
@@ -28,7 +27,7 @@ impl Default for CharacterControlOptions {
 
 impl Plugin for ControlPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(control_characters);
+        app.add_systems(Update, control_characters);
     }
 }
 
@@ -87,7 +86,7 @@ pub fn control_characters(
                             options.velocity -= gravity_vel * 5.0;
                         }
                     }
-                    KeyCode::RControl => {
+                    KeyCode::ControlRight => {
                         options.velocity -= Vect::Y;
                     }
                     _ => {}
@@ -122,7 +121,7 @@ pub fn control_characters(
                                     -gravity_vel + Vect::Y * y_speed * options.gravity_scale.sqrt();
                             }
                         }
-                        KeyCode::RControl => {
+                        KeyCode::ControlRight => {
                             options.velocity -= Vect::Y;
                         }
                         _ => {}
@@ -136,6 +135,3 @@ pub fn control_characters(
         }
     }
 }
-
-#[derive(Clone, Component)]
-pub struct KinematicAnimationsComponent(pub KinematicAnimations);

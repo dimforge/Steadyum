@@ -1,9 +1,9 @@
 use bevy::prelude::*;
 
-use crate::storage::SaveFileData;
 use crate::utils::{ColliderBundle, RigidBodyBundle};
 #[cfg(feature = "dim3")]
 use bevy_rapier::geometry::ComputedColliderShape;
+use bevy_rapier::plugin::RapierContext;
 use std::path::PathBuf;
 
 pub enum Operation {
@@ -12,8 +12,8 @@ pub enum Operation {
     AddPlane, // { start: Point<f32>, stop: Point<f32> },
     AddCollider(ColliderBundle, RigidBodyBundle, Transform),
     AddIntersection,
-    ImportScene(SaveFileData),
     ExportScene(PathBuf),
+    ImportScene(RapierContext),
     ClearScene,
 }
 

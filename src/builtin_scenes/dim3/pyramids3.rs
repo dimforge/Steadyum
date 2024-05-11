@@ -1,8 +1,9 @@
 use crate::builtin_scenes::BuiltinScene;
 use bevy_rapier::prelude::RapierContext;
-use bevy_rapier3d::rapier::prelude::*;
+use bevy_rapier::rapier::dynamics::RigidBodyHandle;
+use bevy_rapier::rapier::prelude::*;
+use na::Vector3;
 use std::collections::HashMap;
-use steadyum_api_types::kinematic::{KinematicAnimations, KinematicCurve};
 
 fn create_wall(
     bodies: &mut RigidBodySet,
@@ -31,77 +32,64 @@ fn create_wall(
     }
 }
 
+const GROUND_SIZE: f32 = 300.0;
+
+fn init_platform_with_walls(result: &mut RapierContext, platform_shift: Vector3<f32>) {
+    /*
+     * Ground
+     */
+    let ground_height = 5.0;
+
+    let rigid_body = RigidBodyBuilder::kinematic_position_based()
+        .translation(platform_shift + Vector3::y() * (-ground_height + 25.0));
+    let ground_handle = result.bodies.insert(rigid_body);
+    let n = 10;
+
+    let collider = ColliderBuilder::cuboid(GROUND_SIZE, ground_height, GROUND_SIZE);
+    result
+        .colliders
+        .insert_with_parent(collider, ground_handle, &mut result.bodies);
+
+    /*
+     * Create the pyramids.
+     */
+    let num_basis = 7;
+    let num_z = 20;
+    let num_x = 20;
+    let shift_y = 25.5;
+
+    for i in 0..num_x {
+        for j in 0..num_z {
+            let x = (i as f32 - num_x as f32 / 2.0) * (num_basis as f32 * 2.0 + 10.0);
+            let z = (j as f32 - num_z as f32 / 2.0) * (num_basis as f32 * 2.0 + 10.0);
+            create_wall(
+                &mut result.bodies,
+                &mut result.colliders,
+                platform_shift + vector![x, shift_y, z],
+                num_basis,
+                vector![1.0, 0.5, 1.0],
+            );
+        }
+    }
+}
+
 pub fn init_world() -> BuiltinScene {
     /*
      * World
      */
     let mut result = RapierContext::default();
-    let mut animations = HashMap::default();
 
-    /*
-     * Ground
-     */
-    let ground_size = 250.0; // 360.0;
-    let ground_height = 5.0;
-
-    let rigid_body = RigidBodyBuilder::kinematic_position_based().translation(vector![
-        0.0,
-        -ground_height + 25.0,
-        0.0
-    ]);
-    let ground_handle = result.bodies.insert(rigid_body);
-    let n = 10;
-    // let heights = DMatrix::from_fn(n, n, |i, j| {
-    //     if i == 0 || i == n - 1 || j == 0 || j == n - 1 {
-    //         2.0
-    //     } else {
-    //         (i as f32).sin() + (j as f32).sin()
-    //     }
-    // });
-    // let collider = ColliderBuilder::heightfield(
-    //     heights,
-    //     vector![ground_size * 2.0, ground_height, ground_size * 2.0],
-    // );
-    let collider = ColliderBuilder::cuboid(ground_size, ground_height, ground_size);
-    result
-        .colliders
-        .insert_with_parent(collider, ground_handle, &mut result.bodies);
-
-    let ground_animation = KinematicAnimations {
-        linear: None,
-        angular: Some(KinematicCurve {
-            control_points: vec![vector![0.0, 0.0, 0.0], vector![0.0, 100.0, 0.0]],
-            t0: 0.0,
-            total_time: 1600.0,
-            loop_back: true,
-        }),
-    };
-    animations.insert(ground_handle, ground_animation);
-
-    /*
-     * Create the pyramids.
-     */
-    let num_basis = 6;
-    let num_z = 10; // 15;
-    let num_x = 25; // 30;
-    let shift_y = ground_height + 25.0;
-
-    for i in 0..num_x {
-        for j in 0..num_z {
-            let x = (i as f32 - num_x as f32 / 2.0) * 14.0;
-            let z = (j as f32 - num_z as f32 / 2.0) * 30.0;
-            create_wall(
-                &mut result.bodies,
-                &mut result.colliders,
-                vector![x, shift_y, z],
-                num_basis,
-                vector![0.5, 0.5, 1.0],
-            );
+    let num = 3; // 9; // 3
+    for i in 0..num {
+        for j in 0..num {
+            let shift = vector![
+                GROUND_SIZE * 2.0 * std::f32::consts::SQRT_2 * (i as f32 - (num / 2) as f32),
+                0.0,
+                GROUND_SIZE * 2.0 * std::f32::consts::SQRT_2 * (j as f32 - (num / 2) as f32)
+            ];
+            init_platform_with_walls(&mut result, shift);
         }
     }
 
-    BuiltinScene {
-        context: result,
-        animations,
-    }
+    BuiltinScene { context: result }
 }

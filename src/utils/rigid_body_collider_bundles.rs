@@ -56,12 +56,25 @@ impl<'a> From<&'a RapierCollider> for ColliderBundle {
     }
 }
 
-#[derive(Clone, Default, Bundle)]
+#[derive(Default, Bundle)]
 pub struct ColliderRenderBundle {
     pub render: ColliderRender,
     pub render_outline: ColliderOutlineRender,
-    pub visibility: Visibility,
-    pub computed_visibility: ComputedVisibility,
+    pub visibility: VisibilityBundle,
+}
+
+impl Clone for ColliderRenderBundle {
+    fn clone(&self) -> Self {
+        Self {
+            render: self.render.clone(),
+            render_outline: self.render_outline.clone(),
+            visibility: VisibilityBundle {
+                visibility: self.visibility.visibility.clone(),
+                inherited_visibility: self.visibility.inherited_visibility.clone(),
+                view_visibility: self.visibility.view_visibility.clone(),
+            },
+        }
+    }
 }
 
 impl ColliderRenderBundle {
@@ -76,7 +89,7 @@ impl ColliderRenderBundle {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Bundle)]
+#[derive(Copy, Clone, Default, Bundle)]
 pub struct RigidBodyBundle {
     pub rigid_body: RigidBody,
     pub velocity: Velocity,

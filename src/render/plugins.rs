@@ -1,9 +1,12 @@
-use crate::render::{add_collider_render_targets, instancing};
+use crate::render::{add_collider_render_targets, CollisionShapeMeshInstances};
 use crate::SteadyumStages;
+use bevy::ecs::prelude::apply_deferred;
 use bevy::prelude::*;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemLabel)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SystemSet)]
 pub enum RenderSystems {
+    BeforeCommands,
+    ProcessCommands,
     AddMissingTransforms,
     CreateColliderRenders,
     CreateColliderOutlineRenders,
@@ -15,41 +18,61 @@ pub struct RapierRenderPlugin;
 
 impl Plugin for RapierRenderPlugin {
     fn build(&self, app: &mut App) {
-        app.add_stage_before(
-            CoreStage::PostUpdate,
-            SteadyumStages::RenderStage,
-            SystemStage::parallel(),
+        app.configure_sets(
+            Update,
+            (
+                RenderSystems::BeforeCommands,
+                RenderSystems::ProcessCommands,
+                RenderSystems::AddMissingTransforms,
+                RenderSystems::CreateColliderRenders,
+                RenderSystems::CreateColliderOutlineRenders,
+                RenderSystems::RenderJoints,
+            )
+                .chain(),
         );
+        // app.add_stage_before(
+        //     Update,
+        //     SteadyumStages::RenderStage,
+        //     SystemStage::parallel(),
+        // );
 
-        app // .add_plugin(bevy_prototype_debug_lines::DebugLinesPlugin::with_depth_test(false))
-            .add_plugin(instancing::InstancingMaterialPlugin)
-            .add_system_to_stage(CoreStage::Update, add_collider_render_targets)
-            .add_system_to_stage(
-                SteadyumStages::RenderStage,
-                super::create_collider_renders_system.label(RenderSystems::CreateColliderRenders),
+        app.init_resource::<CollisionShapeMeshInstances>()
+            .add_systems(
+                Update,
+                apply_deferred
+                    .after(RenderSystems::AddMissingTransforms)
+                    .before(RenderSystems::CreateColliderRenders),
             )
-            .add_system_to_stage(
-                SteadyumStages::RenderStage,
-                super::add_missing_transforms.label(RenderSystems::AddMissingTransforms),
+            .add_systems(
+                Update,
+                add_collider_render_targets.in_set(RenderSystems::AddMissingTransforms),
             )
-            .add_system_to_stage(
-                SteadyumStages::RenderStage,
-                super::create_collider_outline_renders_system
-                    .label(RenderSystems::CreateColliderOutlineRenders),
+            .add_systems(
+                Update, // SteadyumStages::RenderStage,
+                super::create_collider_renders_system.in_set(RenderSystems::CreateColliderRenders),
+            )
+            .add_systems(
+                Update, // SteadyumStages::RenderStage,
+                super::add_missing_transforms.in_set(RenderSystems::AddMissingTransforms),
             );
-        // .add_system_to_stage(
-        //     CoreStage::PreUpdate,
+        // .add_systems(
+        //     SteadyumStages::RenderStage,
+        //     super::create_collider_outline_renders_system
+        //         .label(RenderSystems::CreateColliderOutlineRenders),
+        // );
+        // .add_systems(
+        //     CoreStage::Update,
         //     super::render_joints.label(RenderSystems::RenderJoints),
         // );
 
         #[cfg(feature = "dim2")]
         {
-            app.add_plugin(bevy_prototype_lyon::prelude::ShapePlugin);
+            app.add_plugins(bevy_prototype_lyon::prelude::ShapePlugin);
         }
 
-        #[cfg(feature = "dim3")]
-        {
-            app.add_plugin(bevy_polyline::PolylinePlugin);
-        }
+        // #[cfg(feature = "dim3")]
+        // {
+        //     app.add_plugins(bevy_polyline::PolylinePlugin);
+        // }
     }
 }

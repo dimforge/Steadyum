@@ -50,7 +50,7 @@ impl Plugin for SelectionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(SelectionState::default())
             .insert_resource(SceneMouse::default())
-            .add_system(add_missing_selection_components);
+            .add_systems(Update, add_missing_selection_components);
     }
 }
 
