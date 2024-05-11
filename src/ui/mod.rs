@@ -18,13 +18,13 @@ use crate::cli::CliArgs;
 use crate::control::CharacterControlOptions;
 use crate::operation::Operations;
 use crate::styling::Theme;
-// pub(self) use gizmo::add_missing_gizmos;
+pub(self) use gizmo::add_missing_gizmos;
 pub(self) use input_blocking::focus_ui;
 pub(self) use keyboard::handle_keyboard_inputs;
 pub use ui_state::{ActiveMouseAction, SelectedTool, UiState};
 
 mod debug_render;
-// mod gizmo;
+mod gizmo;
 mod input_blocking;
 mod keyboard;
 mod main_menu;

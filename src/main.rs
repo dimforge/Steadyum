@@ -201,7 +201,7 @@ fn setup_graphics(mut commands: Commands) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 10_000.0,
-            shadows_enabled: false,
+            shadows_enabled: true,
             ..Default::default()
         },
         transform: Transform {
