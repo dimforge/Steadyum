@@ -556,7 +556,6 @@ fn place_gizmo(
     )>,
     #[cfg(feature = "dim2")] camera: Query<&OrbitCamera>,
 ) {
-    println!("num: {}", queries.p0().iter().count());
     let selected: Vec<_> = queries
         .p0()
         .iter()
@@ -600,9 +599,6 @@ fn place_gizmo(
         transform.translation = centroid;
         transform.rotation = plugin_settings.alignment_rotation;
         *g_transform = GlobalTransform::from(*transform);
-
-
-        dbg!("Placing", n_selected);
 
         if n_selected > 0 {
             *visible = Visibility::Visible;

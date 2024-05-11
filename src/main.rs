@@ -5,11 +5,6 @@ extern crate bevy_rapier3d as bevy_rapier;
 extern crate nalgebra as na;
 
 pub use bevy_rapier::parry;
-pub use bevy_rapier::rapier;
-use smooth_bevy_cameras::{
-    controllers::unreal::{UnrealCameraBundle, UnrealCameraController, UnrealCameraPlugin},
-    LookTransformPlugin,
-};
 use std::future::Future;
 
 use crate::camera::{OrbitCamera, OrbitCameraPlugin};
@@ -89,8 +84,6 @@ fn main() {
         // .add_plugins(bevy_stl::StlPlugin)
         .add_plugins(bevy_obj::ObjPlugin)
         .add_plugins(selection::SelectionPlugins)
-        .add_plugins(LookTransformPlugin)
-        .add_plugins(UnrealCameraPlugin::default())
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default().with_physics_scale(1.0))
         .add_plugins(RapierDebugRenderPlugin::default().disabled())
         .add_plugins(render::RapierRenderPlugin)
@@ -315,12 +308,4 @@ fn handle_fractures(
                 .insert(VisibilityBundle::default());
         }
     }
-}
-
-fn block_on<Fut: Future>(f: Fut) -> Fut::Output {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(f)
 }
