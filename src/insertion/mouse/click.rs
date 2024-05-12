@@ -5,7 +5,7 @@ use crate::ui::{ActiveMouseAction, SelectedTool, UiState};
 use bevy::prelude::*;
 
 #[cfg(feature = "dim3")]
-use {crate::selection::SelectableSceneObject, bevy_rapier::rapier::utils::WBasis};
+use {crate::selection::SelectableSceneObject, bevy_rapier::rapier::utils::SimdBasis};
 
 pub fn handle_insertion_click(
     mut commands: Commands,
@@ -14,8 +14,8 @@ pub fn handle_insertion_click(
     mut mouse_action: ResMut<ActiveMouseAction>,
     ui_state: Res<UiState>,
     scene_mouse: Res<SceneMouse>,
-    mouse: Res<Input<MouseButton>>,
-    keyboard: Res<Input<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     preview: Query<(Entity, &InsertionPreview)>,
     transforms: Query<&Transform>,
 ) {
@@ -144,7 +144,6 @@ pub fn handle_insertion_click(
         }
 
         if mouse.just_released(MouseButton::Left) {
-            dbg!("Here");
             match insertion_state.step {
                 Some(InsertionStep::Basis) => {
                     if insertion_state.intersects_environment

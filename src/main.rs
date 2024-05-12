@@ -84,7 +84,7 @@ fn main() {
         // .add_plugins(bevy_stl::StlPlugin)
         .add_plugins(bevy_obj::ObjPlugin)
         .add_plugins(selection::SelectionPlugins)
-        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default().with_physics_scale(1.0))
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugins(RapierDebugRenderPlugin::default().disabled())
         .add_plugins(render::RapierRenderPlugin)
         .add_plugins(ui::RapierUiPlugin)
@@ -176,9 +176,9 @@ fn setup_graphics(mut commands: Commands) {
 
     commands
         .spawn(Camera2dBundle {
-            camera_2d: Camera2d {
-                clear_color: bevy::core_pipeline::clear_color::ClearColorConfig::None,
-            },
+            // camera_2d: Camera2d {
+            //     clear_color: bevy::render::camera::ClearColorConfig::None,
+            // },
             camera: Camera {
                 order: GIZMO_LAYER as isize,
                 ..default()
@@ -241,7 +241,7 @@ fn setup_graphics(mut commands: Commands) {
     commands
         .spawn(Camera3dBundle {
             camera_3d: Camera3d {
-                clear_color: bevy::core_pipeline::clear_color::ClearColorConfig::None,
+                // clear_color: bevy::core_pipeline::clear_color::ClearColorConfig::None,
                 depth_load_op: bevy::core_pipeline::core_3d::Camera3dDepthLoadOp::Clear(0.),
                 ..default()
             },

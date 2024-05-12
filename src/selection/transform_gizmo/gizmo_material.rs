@@ -12,20 +12,6 @@ use bevy::{
 
 pub const GIZMO_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(13953800272683943019);
 
-#[derive(Component, Clone)]
-#[cfg(feature = "dim2")]
-pub struct GizmoStateMaterials {
-    pub idle: Handle<ColorMaterial>,
-    pub hovered: Handle<ColorMaterial>,
-}
-
-#[derive(Component, Clone)]
-#[cfg(feature = "dim3")]
-pub struct GizmoStateMaterials {
-    pub idle: Handle<GizmoMaterial>,
-    pub hovered: Handle<GizmoMaterial>,
-}
-
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 pub struct GizmoMaterial {
     #[uniform(0)]
@@ -60,4 +46,18 @@ impl Material for GizmoMaterial {
         descriptor.primitive.cull_mode = None;
         Ok(())
     }
+}
+
+#[derive(Component, Clone)]
+#[cfg(feature = "dim2")]
+pub struct GizmoStateMaterials {
+    pub idle: Handle<ColorMaterial>,
+    pub hovered: Handle<ColorMaterial>,
+}
+
+#[derive(Component, Clone)]
+#[cfg(feature = "dim3")]
+pub struct GizmoStateMaterials {
+    pub idle: Handle<GizmoMaterial>,
+    pub hovered: Handle<GizmoMaterial>,
 }

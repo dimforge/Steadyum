@@ -6,8 +6,8 @@ pub fn handle_selection_click(
     mut selection_state: ResMut<SelectionState>,
     mut mouse_action: ResMut<ActiveMouseAction>,
     scene_mouse: ResMut<SceneMouse>,
-    mouse: Res<Input<MouseButton>>,
-    keyboard: Res<Input<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     ui_state: Res<UiState>,
     mut selected_entities: Query<(Entity, &mut Selection)>,
 ) {

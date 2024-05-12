@@ -6,7 +6,7 @@ use crate::drag::DragState;
 #[cfg(feature = "dim3")]
 use {
     crate::selection::SelectableSceneObject,
-    bevy_rapier::dynamics::{ImpulseJoint, RigidBody, SphericalJointBuilder},
+    bevy_rapier::dynamics::{ImpulseJoint, RigidBody, SpringJointBuilder},
 };
 
 pub fn handle_drag_click(
@@ -15,7 +15,7 @@ pub fn handle_drag_click(
     mut mouse_action: ResMut<ActiveMouseAction>,
     ui_state: Res<UiState>,
     scene_mouse: Res<SceneMouse>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     transforms: Query<&Transform>,
 ) {
     let mut reset = false;
@@ -60,7 +60,9 @@ pub fn handle_drag_click(
                         .insert(GlobalTransform::default())
                         .insert(ImpulseJoint::new(
                             entity,
-                            SphericalJointBuilder::new().local_anchor1(drag_state.drag_local_point),
+                            // TODO: adjust based on the rigid-body.
+                            SpringJointBuilder::new(0.0, 100.0, 100.0)
+                                .local_anchor1(drag_state.drag_local_point),
                         ))
                         .id();
                     drag_state.mouse_body = Some(entity);

@@ -9,7 +9,7 @@ pub fn bevy_pbr_bundle_from_trimesh(
     position: Isometry<f32>,
 ) -> PbrBundle {
     let mesh = bevy_mesh_from_trimesh(&trimesh);
-    let tra = bevy_rapier::utils::iso_to_transform(&position, 1.0);
+    let tra = bevy_rapier::utils::iso_to_transform(&position);
     let scaled_tra = Transform {
         translation: tra.translation,
         rotation: tra.rotation,
@@ -30,7 +30,10 @@ pub fn bevy_mesh_from_trimesh(trimesh: &TriMesh) -> Mesh {
 
 #[cfg(feature = "dim3")]
 pub fn bevy_mesh_from_trimesh_elements(vertices: &[Point<f32>], indices: &[[u32; 3]]) -> Mesh {
-    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
+    let mut mesh = Mesh::new(
+        bevy::render::render_resource::PrimitiveTopology::TriangleList,
+        Default::default(),
+    );
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
         VertexAttributeValues::from(
@@ -72,14 +75,14 @@ pub fn bevy_mesh_from_trimesh_elements(vertices: &[Point<f32>], indices: &[[u32;
                 .collect::<Vec<_>>(),
         ),
     );
-    mesh.set_indices(Some(Indices::U32(
+    mesh.insert_indices(Indices::U32(
         indices
             .iter()
             .flat_map(|triangle| triangle.iter())
             .chain(indices.iter().flat_map(|triangle| triangle.iter().rev()))
             .cloned()
             .collect(),
-    )));
+    ));
     mesh
 }
 
@@ -93,7 +96,10 @@ pub fn bevy_mesh_from_trimesh_elements(
     vertices: &[Point<f32>],
     mut indices: Option<Vec<[u32; 3]>>,
 ) -> Mesh {
-    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
+    let mut mesh = Mesh::new(
+        bevy::render::render_resource::PrimitiveTopology::TriangleList,
+        Default::default(),
+    );
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
         VertexAttributeValues::from(
@@ -112,14 +118,14 @@ pub fn bevy_mesh_from_trimesh_elements(
         );
     }
 
-    mesh.set_indices(Some(Indices::U32(
+    mesh.insert_indices(Indices::U32(
         indices
             .unwrap()
             .iter()
             .flat_map(|triangle| triangle.iter())
             .cloned()
             .collect(),
-    )));
+    ));
 
     let normals: Vec<_> = (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, VertexAttributeValues::from(normals));

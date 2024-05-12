@@ -45,8 +45,6 @@ pub fn create_collider_renders_system(
             &Collider,
             &ColliderRender,
             &mut ColliderRenderTargets,
-            Changed<Collider>,
-            Changed<ColliderRender>,
         ),
         Or<(Changed<ColliderRender>, Without<RenderInitialized>)>,
         // Or<(Changed<Collider>, Changed<ColliderRender>)>,
@@ -54,7 +52,7 @@ pub fn create_collider_renders_system(
     existing_entities: Query<Entity>,
     old_transform: Query<&Transform>, // FIXME: we shouldn’t need this, but right now collider renders get triggered each frame for some reasons.
 ) {
-    for (entity, collider, render, mut render_target, ch1, ch2) in coll_shape_render.iter_mut() {
+    for (entity, collider, render, mut render_target) in coll_shape_render.iter_mut() {
         commands.entity(entity).insert(RenderInitialized); // FIXME: not sure what this is needed. Change detection for Changed<ColliderRender> should be enough.
         if let Some(mesh) =
             generate_collision_shape_render_mesh(collider, &mut *meshes, &mut instances)
@@ -96,7 +94,7 @@ pub fn create_collider_renders_system(
             #[cfg(feature = "dim2")]
             let mut bundle = MaterialMesh2dBundle {
                 mesh: mesh.into(),
-                material: materials.add(render.color.into()),
+                material: materials.add(ColorMaterial::from(render.color)),
                 transform: Transform::from_xyz(0.0, 0.0, (entity.index() + 1) as f32 * 1.0001e-9),
                 ..Default::default()
             };
@@ -256,7 +254,10 @@ fn generate_collision_shape_render_mesh(
 
 #[cfg(feature = "dim2")]
 fn gen_bevy_mesh(vertices: &[Point<Real>], mut indices: Option<Vec<[u32; 3]>>) -> Mesh {
-    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
+    let mut mesh = Mesh::new(
+        bevy::render::render_resource::PrimitiveTopology::TriangleList,
+        Default::default(),
+    );
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
         VertexAttributeValues::from(
@@ -275,14 +276,14 @@ fn gen_bevy_mesh(vertices: &[Point<Real>], mut indices: Option<Vec<[u32; 3]>>) -
         );
     }
 
-    mesh.set_indices(Some(Indices::U32(
+    mesh.insert_indices(Indices::U32(
         indices
             .unwrap()
             .iter()
             .flat_map(|triangle| triangle.iter())
             .cloned()
             .collect(),
-    )));
+    ));
 
     let normals: Vec<_> = (0..vertices.len()).map(|_| [0.0, 0.0, 1.0]).collect();
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, VertexAttributeValues::from(normals));
@@ -300,7 +301,10 @@ fn gen_bevy_mesh(vertices: &[Point<Real>], mut indices: Option<Vec<[u32; 3]>>) -
 
 #[cfg(feature = "dim3")]
 fn gen_bevy_mesh(vertices: &[Point<Real>], indices: &[[u32; 3]], flat_normals: bool) -> Mesh {
-    let mut mesh = Mesh::new(bevy::render::render_resource::PrimitiveTopology::TriangleList);
+    let mut mesh = Mesh::new(
+        bevy::render::render_resource::PrimitiveTopology::TriangleList,
+        Default::default(),
+    );
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
         VertexAttributeValues::from(
@@ -347,13 +351,13 @@ fn gen_bevy_mesh(vertices: &[Point<Real>], indices: &[[u32; 3]], flat_normals: b
                 .collect::<Vec<_>>(),
         ),
     );
-    mesh.set_indices(Some(Indices::U32(
+    mesh.insert_indices(Indices::U32(
         indices
             .iter()
             .flat_map(|triangle| triangle.iter())
             .cloned()
             .collect(),
-    )));
+    ));
 
     if flat_normals {
         mesh.duplicate_vertices();

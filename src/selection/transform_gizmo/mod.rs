@@ -497,7 +497,7 @@ fn hover_gizmo(
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn grab_gizmo(
     mut commands: Commands,
-    mouse_button_input: Res<Input<MouseButton>>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
     mut gizmo_events: EventWriter<TransformGizmoEvent>,
     mut gizmo_query: Query<(&mut TransformGizmo, &mut Interaction, &GlobalTransform)>,
     selected_items_query: Query<(&Selection, &GlobalTransform, Entity)>,
@@ -643,23 +643,15 @@ fn update_gizmo_settings(
 }
 
 fn sync_gizmo_camera(
-    main_cam: Query<
-        (
-            &Camera,
-            &GlobalTransform,
-            Changed<GlobalTransform>,
-            Changed<Camera>,
-        ),
-        (With<MainCamera>, Without<GizmoCamera>),
-    >,
+    main_cam: Query<(Ref<Camera>, Ref<GlobalTransform>), (With<MainCamera>, Without<GizmoCamera>)>,
     mut gizmo_cam: Query<(&mut Camera, &mut GlobalTransform), With<GizmoCamera>>,
 ) {
-    let (main_cam, main_cam_pos, mcpos_changed, mc_changed) = main_cam.single();
+    let (main_cam, main_cam_pos) = main_cam.single();
     let (mut gizmo_cam, mut gizmo_cam_pos) = gizmo_cam.single_mut();
-    if mcpos_changed {
+    if main_cam_pos.is_changed() {
         *gizmo_cam_pos = *main_cam_pos;
     }
-    if mc_changed {
+    if main_cam.is_changed() {
         *gizmo_cam = main_cam.clone();
         gizmo_cam.order = GIZMO_LAYER as isize;
     }

@@ -86,13 +86,14 @@ fn scene_explorer(
                     .map(|sel| sel.1.selected())
                     .unwrap_or(false);
                 ui.horizontal(|ui| {
-                    egui::containers::CollapsingHeader::new(format!("Body {:?}", entity))
-                        .selected(is_selected)
-                        .show(ui, |ui| {
+                    egui::containers::CollapsingHeader::new(format!("Body {:?}", entity)).show(
+                        ui,
+                        |ui| {
                             if let Ok(_collider) = colliders.get(entity) {
                                 ui.label(format!("Collider {:?}", entity));
                             }
-                        });
+                        },
+                    );
 
                     let is_visible = visibility
                         .get(entity)
@@ -351,7 +352,7 @@ fn selection_inspector(
 
                     if let Some(sleep_state) = sleep_state.as_mut() {
                         let mut sleeping = sleep_state.sleeping;
-                        let mut can_sleep = sleep_state.linear_threshold > 0.0
+                        let mut can_sleep = sleep_state.normalized_linear_threshold > 0.0
                             && sleep_state.angular_threshold > 0.0;
 
                         ui.label("Sleeping: ");

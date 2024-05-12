@@ -30,10 +30,10 @@ voxels = ["dot_vox"]
 [dependencies]
 nalgebra = { version = "0.32", features = ["convert-glam020"] }
 # Don't enable the default features because we don't need the ColliderSet/RigidBodySet
-rapier3d = { version = "0.17", optional = true, features = ["profiler"] }
-bevy_rapier3d = { version = "0.23", optional = true, features = ["serde-serialize"] }
-rapier2d = { version = "0.17", optional = true, features = ["profiler"] }
-bevy_rapier2d = { version = "0.23", optional = true, features = ["serde-serialize"] }
+rapier3d = { version = "0.19", optional = true, features = ["profiler"] }
+bevy_rapier3d = { version = "0.26", optional = true, features = ["serde-serialize"] }
+rapier2d = { version = "0.19", optional = true, features = ["profiler"] }
+bevy_rapier2d = { version = "0.26", optional = true, features = ["serde-serialize"] }
 
 bitflags = "1"
 strum = "0.24"
@@ -55,13 +55,13 @@ uuid = "1"
 dot_vox = { version = "5", optional = true }
 instant = "0.1"
 
-bevy = { version = "0.12", features = ["serialize"] }
-bevy_egui = "0.23"
+bevy = { version = "0.13", features = ["serialize"] }
+bevy_egui = "0.27"
 #bevy_stl = "0.7"
-bevy_obj = "0.12"
-bevy_polyline = "0.8"
-bevy_prototype_lyon = "0.10"
-bevy_infinite_grid = "0.10"
+bevy_obj = "0.13"
+bevy_polyline = { git = "https://github.com/nsabovic/bevy_polyline", branch = "bevy-13" }
+bevy_prototype_lyon = "0.11"
+bevy_infinite_grid = "0.12"
 
 # Not compatible with WASM
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -25,10 +25,7 @@ pub fn add_missing_transforms(
             {
                 commands
                     .entity(entity)
-                    .insert(bevy_rapier::utils::iso_to_transform(
-                        collider.position(),
-                        1.0,
-                    ));
+                    .insert(bevy_rapier::utils::iso_to_transform(collider.position()));
             }
         }
         if global_transform.is_none() {

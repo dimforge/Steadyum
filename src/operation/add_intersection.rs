@@ -25,7 +25,7 @@ pub fn update_intersection(
     mut _meshes: ResMut<Assets<Mesh>>,
     _intersections: Query<(Entity, &PersistentIntersection)>,
     _transforms: Query<&Transform, Changed<Transform>>,
-    _global_transforms: Query<(&GlobalTransform, Changed<GlobalTransform>)>,
+    _global_transforms: Query<&GlobalTransform>,
     _shapes: Query<&Collider>,
 ) {
 }
@@ -72,18 +72,20 @@ pub fn update_intersection(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     intersections: Query<(Entity, &PersistentIntersection)>,
-    global_transforms: Query<(&GlobalTransform, Changed<GlobalTransform>)>,
+    global_transforms: Query<Ref<GlobalTransform>>,
     shapes: Query<&Collider>,
 ) {
     for (entity, intersection) in intersections.iter() {
-        if let (Ok((t1, changed1)), Ok((t2, changed2))) = (
+        if let (Ok(t1), Ok(t2)) = (
             global_transforms.get(intersection.0),
             global_transforms.get(intersection.1),
         ) {
+            let t1_changed = t1.is_changed();
+            let t2_changed = t2.is_changed();
             let t1 = t1.compute_transform();
             let t2 = t2.compute_transform();
 
-            if changed1 || changed2 {
+            if t1_changed || t2_changed {
                 if let (Ok(shape1), Ok(shape2)) =
                     (shapes.get(intersection.0), shapes.get(intersection.1))
                 {

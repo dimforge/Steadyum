@@ -32,7 +32,7 @@ impl Plugin for ControlPlugin {
 }
 
 pub fn control_characters(
-    events: Res<Input<KeyCode>>,
+    events: Res<ButtonInput<KeyCode>>,
     config: Res<RapierConfiguration>,
     context: Res<RapierContext>,
     mut characters: Query<(
@@ -75,10 +75,10 @@ pub fn control_characters(
             #[cfg(feature = "dim2")]
             for key in events.get_pressed() {
                 match *key {
-                    KeyCode::Right => {
+                    KeyCode::ArrowRight => {
                         options.velocity += Vect::X * speed;
                     }
-                    KeyCode::Left => {
+                    KeyCode::ArrowLeft => {
                         options.velocity -= Vect::X * speed;
                     }
                     KeyCode::Space => {
@@ -103,16 +103,16 @@ pub fn control_characters(
 
                 for key in events.get_pressed() {
                     match *key {
-                        KeyCode::Right => {
+                        KeyCode::ArrowRight => {
                             options.velocity += rot_x * speed;
                         }
-                        KeyCode::Left => {
+                        KeyCode::ArrowLeft => {
                             options.velocity -= rot_x * speed;
                         }
-                        KeyCode::Up => {
+                        KeyCode::ArrowUp => {
                             options.velocity -= rot_z * speed;
                         }
-                        KeyCode::Down => {
+                        KeyCode::ArrowDown => {
                             options.velocity += rot_z * speed;
                         }
                         KeyCode::Space => {

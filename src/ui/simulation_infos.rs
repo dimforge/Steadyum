@@ -40,8 +40,6 @@ Solver: {:.2}ms
         Velocity assembly: {:.2}ms
         Velocity resolution: {:.2}ms
         Velocity integration: {:.2}ms
-        Position assembly: {:.2}ms
-        Position resolution: {:.2}ms
 CCD: {:.2}ms
         # of substeps: {}
         TOI computation: {:.2}ms
@@ -57,8 +55,6 @@ CCD: {:.2}ms
         counters.solver.velocity_assembly_time.time(),
         counters.velocity_resolution_time(),
         counters.solver.velocity_update_time.time(),
-        counters.solver.position_assembly_time.time(),
-        counters.position_resolution_time(),
         counters.ccd_time(),
         counters.ccd.num_substeps,
         counters.ccd.toi_computation_time.time(),

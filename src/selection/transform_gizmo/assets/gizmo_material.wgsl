@@ -1,12 +1,10 @@
-// This Shader was extracted from the bevy_transform_gizmo crate (https://github.com/ForesightMiningSoftwareCorporation/bevy_transform_gizmo).
-
 #import bevy_pbr::mesh_functions::{get_model_matrix, mesh_position_local_to_clip}
 
 struct GizmoMaterial {
     color: vec4<f32>,
 };
 
-@group(1) @binding(0)
+@group(2) @binding(0)
 var<uniform> material: GizmoMaterial;
 
 struct Vertex {

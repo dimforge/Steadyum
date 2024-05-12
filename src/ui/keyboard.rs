@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 pub fn handle_keyboard_inputs(
     mut commands: Commands,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     selection: Query<(Entity, &Selection)>,
 ) {
     for (entity, selection) in selection.iter() {

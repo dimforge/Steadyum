@@ -13,7 +13,7 @@ pub fn handle_projectile_click(
     mut operations: ResMut<Operations>,
     ui_state: Res<UiState>,
     scene_mouse: Res<SceneMouse>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
 ) {
     let mut reset = false;
 

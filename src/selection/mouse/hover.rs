@@ -7,7 +7,7 @@ use bevy_rapier::prelude::*;
 #[cfg(feature = "dim2")]
 pub fn update_hovered_entity(
     mut scene_mouse: ResMut<SceneMouse>,
-    keyboard: Res<Input<KeyCode>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     physics: Res<RapierContext>,
     windows: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&GlobalTransform, &Camera), With<crate::MainCamera>>,

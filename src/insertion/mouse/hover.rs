@@ -17,8 +17,8 @@ pub fn update_preview_scale(
     physics: Res<RapierContext>,
     theme: Res<Theme>,
     scene_mouse: Res<SceneMouse>,
-    mouse: Res<Input<MouseButton>>,
-    keyboard: Res<Input<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    keyboard: Res<ButtonInput<KeyCode>>,
     mut materials: ResMut<Assets<PolylineMaterial>>,
     preview: Query<(Entity, &InsertionPreview)>,
 ) {
@@ -123,10 +123,10 @@ pub fn update_preview_scale(
 
             if inter.is_some() {
                 insertion_state.intersects_environment = true;
-                materials.get_mut(mat_handle).unwrap().color = Color::RED;
+                // materials.get_mut(mat_handle).unwrap().color = Color::RED;
             } else {
                 insertion_state.intersects_environment = false;
-                materials.get_mut(mat_handle).unwrap().color = theme.insertion_preview_color();
+                // materials.get_mut(mat_handle).unwrap().color = theme.insertion_preview_color();
             }
         }
     }
