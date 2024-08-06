@@ -23,30 +23,40 @@ parallel = ["bevy_rapier2d?/parallel", "bevy_rapier3d?/parallel"]
 simd-stable = ["bevy_rapier2d?/simd-stable", "bevy_rapier3d?/simd-stable"]
 wasm-bindgen = ["bevy_rapier2d?/wasm-bindgen", "bevy_rapier3d?/wasm-bindgen"]
 simd-nightly = ["bevy_rapier2d?/simd-nightly", "bevy_rapier3d?/simd-nightly"]
-serde-serialize = ["bevy_rapier2d?/serde-serialize", "bevy_rapier3d?/serde-serialize"]
-enhanced-determinism = ["bevy_rapier2d?/enhanced-determinism", "bevy_rapier3d?/enhanced-determinism"]
+serde-serialize = [
+    "bevy_rapier2d?/serde-serialize",
+    "bevy_rapier3d?/serde-serialize",
+]
+enhanced-determinism = [
+    "bevy_rapier2d?/enhanced-determinism",
+    "bevy_rapier3d?/enhanced-determinism",
+]
 voxels = ["dot_vox"]
 
 [dependencies]
-nalgebra = { version = "0.32", features = ["convert-glam020"] }
+nalgebra = { version = "0.33", features = ["convert-glam028"] }
 # Don't enable the default features because we don't need the ColliderSet/RigidBodySet
-rapier3d = { version = "0.19", optional = true, features = ["profiler"] }
-bevy_rapier3d = { version = "0.26", optional = true, features = ["serde-serialize"] }
-rapier2d = { version = "0.19", optional = true, features = ["profiler"] }
-bevy_rapier2d = { version = "0.26", optional = true, features = ["serde-serialize"] }
+rapier3d = { version = "0.21", optional = true, features = ["profiler"] }
+bevy_rapier3d = { version = "0.27", optional = true, features = [
+    "serde-serialize",
+] }
+rapier2d = { version = "0.21", optional = true, features = ["profiler"] }
+bevy_rapier2d = { version = "0.27", optional = true, features = [
+    "serde-serialize",
+] }
 
 bitflags = "1"
-strum = "0.24"
-strum_macros = "0.24"
+strum = "0.26"
+strum_macros = "0.26"
 image = "0.24"
-winit = "0.28"
+winit = "0.30"
 log = "0.4"
 oorandom = "11"
 bytemuck = "1"
 serde = "1"
 bincode = "1"
 serde_json = "1"
-noise = "0.8"
+noise = "0.9"
 sled = "0.34"
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
@@ -55,17 +65,17 @@ uuid = "1"
 dot_vox = { version = "5", optional = true }
 instant = "0.1"
 
-bevy = { version = "0.13", features = ["serialize"] }
-bevy_egui = "0.27"
+bevy = { version = "0.14", features = ["serialize"] }
+bevy_egui = "0.28"
 #bevy_stl = "0.7"
-bevy_obj = "0.13"
-bevy_polyline = { git = "https://github.com/nsabovic/bevy_polyline", branch = "bevy-13" }
-bevy_prototype_lyon = "0.11"
-bevy_infinite_grid = "0.12"
+bevy_obj = "0.14"
+bevy_polyline = "0.10"
+bevy_prototype_lyon = "0.12"
+bevy_infinite_grid = "0.13"
 
 # Not compatible with WASM
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-native-dialog = "0.6" # For opening mesh files.
+native-dialog = "0.7" # For opening mesh files.
 
 [profile.release]
 debug = true
@@ -83,4 +93,3 @@ debug = true
 #bevy_rapier3d = { path = "../bevy_rapier/bevy_rapier3d" }
 #bevy_rapier2d = { git = "https://github.com/dimforge/bevy_rapier", branch = "gosim" }
 #bevy_rapier3d = { git = "https://github.com/dimforge/bevy_rapier", branch = "gosim" }
-

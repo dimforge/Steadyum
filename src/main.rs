@@ -74,7 +74,7 @@ fn main() {
             title,
             ..Default::default()
         })*/
-        .insert_resource(ClearColor(Color::rgb(0.55, 0.55, 0.55)))
+        .insert_resource(ClearColor(Color::srgb(0.55, 0.55, 0.55)))
         .insert_resource(args)
         .insert_resource(PhysicsProgress::default())
         .add_plugins(DefaultPlugins)

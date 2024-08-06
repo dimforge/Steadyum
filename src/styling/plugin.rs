@@ -1,5 +1,5 @@
 use crate::styling::ColorGenerator;
-use bevy::prelude::*;
+use bevy::{color::palettes, prelude::*};
 use bevy_egui::egui::Visuals;
 
 pub struct StylingPlugin;
@@ -26,7 +26,7 @@ impl Theme {
 
     pub fn background_color(&self) -> Color {
         if self.dark_mode {
-            Color::DARK_GRAY
+            palettes::css::DARK_GRAY.into()
         } else {
             Color::WHITE
         }
@@ -42,17 +42,17 @@ impl Theme {
 
     pub fn floor_minor_line_color(&self) -> Color {
         if self.dark_mode {
-            Color::rgb(0.1, 0.1, 0.1)
+            Color::srgb(0.1, 0.1, 0.1)
         } else {
-            Color::rgb(0.7, 0.7, 0.7)
+            Color::srgb(0.7, 0.7, 0.7)
         }
     }
 
     pub fn floor_major_line_color(&self) -> Color {
         if self.dark_mode {
-            Color::rgb(0.25, 0.25, 0.25)
+            Color::srgb(0.25, 0.25, 0.25)
         } else {
-            Color::rgb(0.25, 0.25, 0.25)
+            Color::srgb(0.25, 0.25, 0.25)
         }
     }
 }

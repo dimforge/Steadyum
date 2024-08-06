@@ -76,7 +76,7 @@ pub(super) fn ui(
                         operations.push(Operation::ClearScene)
                     }
                     if ui.button("🚪 Exit").clicked() {
-                        exit.send(AppExit);
+                        exit.send(AppExit::Success);
                     }
                 });
             })
