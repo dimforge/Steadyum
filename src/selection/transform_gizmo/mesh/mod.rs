@@ -229,6 +229,7 @@ pub fn build_gizmo(
     // Build the gizmo using the variables above.
     commands
         .spawn(TransformGizmoBundle::default())
+        .insert(Name::new("Transform Gizmo"))
         .with_children(|parent| {
             // Translation Handles
             parent
@@ -310,6 +311,7 @@ pub fn build_gizmo(
                     material: gizmo_matl_y.clone(),
                     ..Default::default()
                 })
+                .insert(Name::new("RotateAxis"))
                 .insert(rotation_selection.clone())
                 .insert(matls_y.clone())
                 .insert(TransformGizmoInteraction::RotateAxis {

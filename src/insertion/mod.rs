@@ -262,7 +262,8 @@ fn spawn_preview_entity(mut commands: Commands) {
     commands
         .spawn(preview_shape_bundle(Vect::ONE, Color::WHITE))
         .insert(InsertionPreview)
-        .insert(Visibility::Hidden);
+        .insert(Visibility::Hidden)
+        .insert(Name::new("Preview"));
 }
 
 #[cfg(feature = "dim2")]

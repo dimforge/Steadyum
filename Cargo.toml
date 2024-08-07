@@ -34,7 +34,7 @@ enhanced-determinism = [
 voxels = ["dot_vox"]
 
 [dependencies]
-nalgebra = { version = "0.33", features = ["convert-glam028"] }
+nalgebra = { version = "0.33", features = ["convert-glam027"] }
 # Don't enable the default features because we don't need the ColliderSet/RigidBodySet
 rapier3d = { version = "0.21", optional = true, features = ["profiler"] }
 bevy_rapier3d = { version = "0.27", optional = true, features = [

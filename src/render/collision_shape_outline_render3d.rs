@@ -49,7 +49,10 @@ pub fn create_collider_outline_renders_system(
                 }
             } else {
                 let target = commands.entity(entity).with_children(|cmd| {
-                    let target = cmd.spawn(bundle).id();
+                    let target = cmd
+                        .spawn(bundle)
+                        .insert(Name::new("Collider Outlines"))
+                        .id();
                     render_target.outline_target = Some(target);
                 });
             }
