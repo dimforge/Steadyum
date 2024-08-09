@@ -74,7 +74,7 @@ fn main() {
             title,
             ..Default::default()
         })*/
-        .insert_resource(ClearColor(Color::rgb(0.55, 0.55, 0.55)))
+        .insert_resource(ClearColor(Color::srgb(0.55, 0.55, 0.55)))
         .insert_resource(args)
         .insert_resource(PhysicsProgress::default())
         .add_plugins(DefaultPlugins)
@@ -191,19 +191,21 @@ fn setup_graphics(mut commands: Commands) {
 
 #[cfg(feature = "dim3")]
 fn setup_graphics(mut commands: Commands) {
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance: 10_000.0,
-            shadows_enabled: true,
+    commands
+        .spawn(DirectionalLightBundle {
+            directional_light: DirectionalLight {
+                illuminance: 10_000.0,
+                shadows_enabled: true,
+                ..Default::default()
+            },
+            transform: Transform {
+                translation: Vec3::new(10.0, 2.0, 10.0),
+                rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        transform: Transform {
-            translation: Vec3::new(10.0, 2.0, 10.0),
-            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
-            ..Default::default()
-        },
-        ..Default::default()
-    });
+        })
+        .insert(Name::new("Light"));
 
     let mut orbit = OrbitCamera {
         pan_sensitivity: 4.0,
@@ -227,6 +229,7 @@ fn setup_graphics(mut commands: Commands) {
             }),
             ..Default::default()
         })
+        .insert(Name::new("3D Camera"))
         // .insert(UnrealCameraBundle::new(
         //     UnrealCameraController { ..default() },
         //     Vec3::new(-2.0, 25.0, 5.0),
@@ -251,6 +254,7 @@ fn setup_graphics(mut commands: Commands) {
             },
             ..default()
         })
+        .insert(Name::new("Gizmos Camera"))
         .insert(GizmoCamera)
         .insert(RenderLayers::layer(GIZMO_LAYER));
 }

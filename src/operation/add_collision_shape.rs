@@ -13,6 +13,7 @@ pub fn add_collision_shape(
             commands
                 .spawn(collider.clone())
                 .insert(rigid_body.clone())
+                .insert(Name::new("Collision Shape"))
                 .insert(TransformBundle::from_transform(*transform))
                 .insert(ColliderRenderBundle::new(&mut colors));
         }

@@ -14,13 +14,15 @@ impl Plugin for FloorPlugin {
 }
 
 fn setup_floor(mut commands: Commands, _meshes: ResMut<Assets<Mesh>>) {
-    commands.spawn(InfiniteGridBundle {
-        settings: InfiniteGridSettings {
-            // shadow_color: None,
-            fadeout_distance: 500.0,
-            dot_fadeout_strength: 0.1,
+    commands
+        .spawn(InfiniteGridBundle {
+            settings: InfiniteGridSettings {
+                // shadow_color: None,
+                fadeout_distance: 500.0,
+                dot_fadeout_strength: 0.1,
+                ..Default::default()
+            },
             ..Default::default()
-        },
-        ..Default::default()
-    });
+        })
+        .insert(Name::new("Infinite Grid"));
 }

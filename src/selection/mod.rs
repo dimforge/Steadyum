@@ -1,5 +1,6 @@
 use bevy::app::PluginGroupBuilder;
 use bevy::prelude::*;
+use bevy::render::view::{check_visibility, VisibilitySystems};
 use bevy_rapier::prelude::*;
 
 pub use self::selection_shape::SelectionShape;
@@ -50,7 +51,11 @@ impl Plugin for SelectionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(SelectionState::default())
             .insert_resource(SceneMouse::default())
-            .add_systems(Update, add_missing_selection_components);
+            .add_systems(Update, add_missing_selection_components)
+            .add_systems(
+                PostUpdate,
+                check_visibility::<With<Selection>>.in_set(VisibilitySystems::CheckVisibility),
+            );
     }
 }
 

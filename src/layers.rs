@@ -1,1 +1,1 @@
-pub const GIZMO_LAYER: u8 = 1;
+pub const GIZMO_LAYER: usize = 1;

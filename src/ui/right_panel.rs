@@ -97,7 +97,7 @@ fn scene_explorer(
 
                     let is_visible = visibility
                         .get(entity)
-                        .map(|v| v.1 == Visibility::Visible)
+                        .map(|v| v.1 != Visibility::Hidden)
                         .unwrap_or(true);
                     let visibility_icon = if is_visible { "🌑" } else { "🌕" };
                     if ui.button(visibility_icon).clicked() {

@@ -4,6 +4,7 @@
 use super::{SceneMouse, SelectableSceneObject, Selection};
 use crate::parry::query;
 use bevy::asset::load_internal_asset;
+use bevy::render::view::{check_visibility, VisibilitySystems};
 use bevy::{input::InputSystem, prelude::*, transform::TransformSystem};
 use bevy_rapier::dynamics::ReadMassProperties;
 use gizmo_material::{GizmoMaterial, GizmoStateMaterials};
@@ -140,7 +141,11 @@ impl Plugin for TransformGizmoPlugin {
         )
         .add_systems(Startup, mesh::build_gizmo)
         .add_systems(PostStartup, place_gizmo)
-        .add_systems(Update, sync_gizmo_camera);
+        .add_systems(Update, sync_gizmo_camera)
+        .add_systems(
+            PostUpdate,
+            check_visibility::<With<TransformGizmo>>.in_set(VisibilitySystems::CheckVisibility),
+        );
     }
 }
 

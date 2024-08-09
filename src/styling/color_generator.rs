@@ -17,7 +17,7 @@ impl Default for ColorGenerator {
 
 impl ColorGenerator {
     pub fn gen_color(&mut self) -> Color {
-        Color::rgb(
+        Color::srgb(
             self.rng.rand_float(),
             self.rng.rand_float(),
             self.rng.rand_float(),
@@ -26,7 +26,7 @@ impl ColorGenerator {
 
     pub fn outline_color(color: Color) -> Color {
         if cfg!(feature = "dim2") {
-            let [h, s, l, a] = color.as_hsla_f32();
+            let [h, s, l, a] = Hsla::from(color).to_f32_array();
             Color::hsla(h, s, l * 1.2, a)
         } else {
             color
@@ -42,7 +42,7 @@ impl ColorGenerator {
         let color = &mut self.region_colors[region];
 
         if color.is_none() {
-            *color = Some(Color::rgb(
+            *color = Some(Color::srgb(
                 seeded_rng.rand_float(),
                 seeded_rng.rand_float(),
                 seeded_rng.rand_float(),

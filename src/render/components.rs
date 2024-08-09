@@ -1,19 +1,19 @@
 use bevy::prelude::Color;
 use bevy::prelude::*;
 
-pub const DEFAULT_COLOR: Color = Color::BEIGE;
+pub const DEFAULT_COLOR: Color = Color::Srgba(bevy::color::palettes::css::BEIGE);
 pub const DEFAULT_PALETTE: [Color; 3] = [
-    Color::rgb(
+    Color::srgb(
         0x98 as f32 / 255.0,
         0xC1 as f32 / 255.0,
         0xD9 as f32 / 255.0,
     ),
-    Color::rgb(
+    Color::srgb(
         0x05 as f32 / 255.0,
         0x3C as f32 / 255.0,
         0x5E as f32 / 255.0,
     ),
-    Color::rgb(
+    Color::srgb(
         0x1F as f32 / 255.0,
         0x7A as f32 / 255.0,
         0x8C as f32 / 255.0,
@@ -91,8 +91,8 @@ impl ColliderOutlineRender {
 /*
  * Joint rendering.
  */
-pub const DEFAULT_JOINT_ANCHOR_COLOR: Color = Color::rgb(0.0, 0.0, 1.0);
-pub const DEFAULT_JOINT_SEPARATION_COLOR: Color = Color::rgb(1.0, 0.0, 1.0);
+pub const DEFAULT_JOINT_ANCHOR_COLOR: Color = Color::srgb(0.0, 0.0, 1.0);
+pub const DEFAULT_JOINT_SEPARATION_COLOR: Color = Color::srgb(1.0, 0.0, 1.0);
 
 #[derive(Copy, Clone, Component)]
 pub struct JointRender {

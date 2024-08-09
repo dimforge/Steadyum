@@ -46,7 +46,7 @@ pub fn build_gizmo(
         shape: Collider::ball(arc_radius),
     };
 
-    let cube_mesh = meshes.add(Mesh::from(shape::Cube { size: 0.1 }));
+    let cube_mesh = meshes.add(Mesh::from(Cuboid::from_size(Vec3::splat(0.1))));
 
     // Define gizmo materials
     let (s, l, a) = (0.45, 0.59, 1.0);
@@ -195,7 +195,7 @@ pub fn build_gizmo(
         shape: Collider::cuboid(arc_radius / 1.5, ring_radius * 2.0, arc_radius / 1.5),
     };
 
-    let cube_mesh = meshes.add(Mesh::from(shape::Cube { size: 0.1 }));
+    let cube_mesh = meshes.add(Mesh::from(Cuboid::from_size(Vec3::splat(0.1))));
 
     // Define gizmo materials
     let (s, l, a) = (0.45, 0.59, 1.0);
@@ -223,12 +223,13 @@ pub fn build_gizmo(
 
     /*let gizmo_matl_origin = materials.add(StandardMaterial {
         unlit: true,
-        base_color: Color::rgb(0.7, 0.7, 0.7),
+        base_color: Color::srgb(0.7, 0.7, 0.7),
         ..Default::default()
     });*/
     // Build the gizmo using the variables above.
     commands
         .spawn(TransformGizmoBundle::default())
+        .insert(Name::new("Transform Gizmo"))
         .with_children(|parent| {
             // Translation Handles
             parent
@@ -310,6 +311,7 @@ pub fn build_gizmo(
                     material: gizmo_matl_y.clone(),
                     ..Default::default()
                 })
+                .insert(Name::new("RotateAxis"))
                 .insert(rotation_selection.clone())
                 .insert(matls_y.clone())
                 .insert(TransformGizmoInteraction::RotateAxis {
