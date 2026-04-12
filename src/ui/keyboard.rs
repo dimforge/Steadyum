@@ -9,7 +9,7 @@ pub fn handle_keyboard_inputs(
     for (entity, selection) in selection.iter() {
         if selection.selected() {
             if keys.just_released(KeyCode::Delete) {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             }
         }
     }

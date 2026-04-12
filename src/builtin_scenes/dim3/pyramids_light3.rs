@@ -1,14 +1,13 @@
 use crate::builtin_scenes::BuiltinScene;
-use bevy_rapier::prelude::RapierContext;
-use bevy_rapier3d::rapier::prelude::*;
-use std::collections::HashMap;
+use crate::physics::PhysicsState;
+use crate::physics::rapier::prelude::*;
 
 fn create_wall(
     bodies: &mut RigidBodySet,
     colliders: &mut ColliderSet,
-    offset: Vector<f32>,
+    offset: Vector,
     stack_height: usize,
-    half_extents: Vector<f32>,
+    half_extents: Vector,
 ) {
     let shift = half_extents * 2.0;
     for i in 0usize..stack_height {
@@ -21,7 +20,7 @@ fn create_wall(
                 - stack_height as f32 * half_extents.z;
 
             // Build the rigid body.
-            let rigid_body = RigidBodyBuilder::dynamic().translation(vector![x, y, z]);
+            let rigid_body = RigidBodyBuilder::dynamic().translation(Vec3::new(x, y, z));
             let handle = bodies.insert(rigid_body);
             let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z);
             colliders.insert_with_parent(collider, handle, bodies);
@@ -33,7 +32,7 @@ fn create_spherical_joints(
     bodies: &mut RigidBodySet,
     colliders: &mut ColliderSet,
     impulse_joints: &mut ImpulseJointSet,
-    origin: Vector<f32>,
+    origin: Vector,
     num: usize,
 ) {
     let rad = 0.4;
@@ -55,7 +54,7 @@ fn create_spherical_joints(
             };
 
             let rigid_body = RigidBodyBuilder::new(status)
-                .translation(origin + vector![fk * shift, 0.0, fi * shift * 2.0]);
+                .translation(origin + Vec3::new(fk * shift, 0.0, fi * shift * 2.0));
             let child_handle = bodies.insert(rigid_body);
             let collider = ColliderBuilder::cuboid(rad, rad, rad);
             colliders.insert_with_parent(collider, child_handle, bodies);
@@ -64,7 +63,7 @@ fn create_spherical_joints(
             if i > 0 {
                 let parent_handle = *body_handles.last().unwrap();
                 let joint =
-                    SphericalJointBuilder::new().local_anchor2(point![0.0, 0.0, -shift * 2.0]);
+                    SphericalJointBuilder::new().local_anchor2(Vec3::new(0.0, 0.0, -shift * 2.0));
 
                 impulse_joints.insert(parent_handle, child_handle, joint, true);
             }
@@ -73,7 +72,7 @@ fn create_spherical_joints(
             if k > 0 {
                 let parent_index = body_handles.len() - num;
                 let parent_handle = body_handles[parent_index];
-                let joint = SphericalJointBuilder::new().local_anchor2(point![-shift, 0.0, 0.0]);
+                let joint = SphericalJointBuilder::new().local_anchor2(Vec3::new(-shift, 0.0, 0.0));
                 impulse_joints.insert(parent_handle, child_handle, joint, true);
             }
 
@@ -86,7 +85,7 @@ pub fn init_world() -> BuiltinScene {
     /*
      * World
      */
-    let mut result = RapierContext::default();
+    let mut result = PhysicsState::default();
 
     /*
      * Ground
@@ -95,7 +94,7 @@ pub fn init_world() -> BuiltinScene {
     let ground_height = 0.1;
 
     let rigid_body =
-        RigidBodyBuilder::kinematic_position_based().translation(vector![0.0, -ground_height, 0.0]);
+        RigidBodyBuilder::kinematic_position_based().translation(Vec3::new(0.0, -ground_height, 0.0));
     let ground_handle = result.bodies.insert(rigid_body);
     let collider = ColliderBuilder::cuboid(ground_size, ground_height, ground_size);
     result
@@ -115,17 +114,17 @@ pub fn init_world() -> BuiltinScene {
         create_wall(
             &mut result.bodies,
             &mut result.colliders,
-            vector![x, shift_y, 0.0],
+            Vec3::new(x, shift_y, 0.0),
             num_z,
-            vector![0.5, 0.5, 1.0],
+            Vec3::new(0.5, 0.5, 1.0),
         );
 
         create_wall(
             &mut result.bodies,
             &mut result.colliders,
-            vector![x, shift_y, shift_z],
+            Vec3::new(x, shift_y, shift_z),
             num_z - 2,
-            vector![0.5, 0.5, 1.0],
+            Vec3::new(0.5, 0.5, 1.0),
         );
     }
 
@@ -137,14 +136,14 @@ pub fn init_world() -> BuiltinScene {
                 &mut result.bodies,
                 &mut result.colliders,
                 &mut result.impulse_joints,
-                vector![
+                Vec3::new(
                     (i as f32 - num_i as f32 / 2.0) * 10.0,
                     15.0,
-                    (j as f32 - num_j as f32 / 2.0) * 10.0
-                ],
+                    (j as f32 - num_j as f32 / 2.0) * 10.0,
+                ),
                 4,
             );
         }
     }
-    BuiltinScene { context: result }
+    BuiltinScene { state: result }
 }

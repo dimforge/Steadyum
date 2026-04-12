@@ -1,8 +1,8 @@
 use crate::cli::CliArgs;
+use crate::physics::PhysicsState;
 use bevy::window::Window;
 use bevy_egui::egui::PointerButton;
 use bevy_egui::{egui, EguiContexts};
-use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
 
 use super::{ButtonTexture, UiState};
 
@@ -11,13 +11,12 @@ pub(super) fn ui(
     cli: &CliArgs,
     ui_context: &mut EguiContexts,
     ui_state: &mut UiState,
-    _physics_context: &mut RapierContext,
-    physics_config: &mut RapierConfiguration,
+    physics: &mut PhysicsState,
 ) {
     if ui_state.single_step {
         ui_state.single_step = false;
         ui_state.running = false;
-        physics_config.physics_pipeline_active = false;
+        physics.running = false;
     }
 
     let button_sz = [40.0, 40.0];
@@ -31,7 +30,7 @@ pub(super) fn ui(
         .resizable(false)
         .title_bar(false)
         .fixed_pos(pos)
-        .show(ui_context.ctx_mut(), |ui| {
+        .show(ui_context.ctx_mut().expect("EguiContext"), |ui| {
             ui.horizontal(|ui| {
                 let _ = ui.button(ButtonTexture::Undo.rich_text());
 
@@ -44,14 +43,13 @@ pub(super) fn ui(
                 let play_pause_button = ui.button(play_pause.rich_text());
                 if play_pause_button.clicked_by(PointerButton::Primary) {
                     if !cli.distributed_physics {
-                        physics_config.physics_pipeline_active =
-                            !physics_config.physics_pipeline_active;
+                        physics.running = !physics.running;
                     }
 
                     ui_state.running = !ui_state.running;
                 } else if play_pause_button.clicked_by(PointerButton::Secondary) {
                     if !cli.distributed_physics {
-                        physics_config.physics_pipeline_active = true;
+                        physics.running = true;
                     }
 
                     ui_state.running = true;

@@ -1,6 +1,4 @@
-use bevy_rapier::plugin::RapierContext;
-use bevy_rapier::rapier::prelude::*;
-use std::collections::HashMap;
+use crate::physics::PhysicsState;
 
 #[cfg(feature = "dim2")]
 mod dim2;
@@ -13,11 +11,11 @@ pub use dim2::builders;
 pub use dim3::builders;
 
 pub struct BuiltinScene {
-    pub context: RapierContext,
+    pub state: PhysicsState,
 }
 
-impl From<RapierContext> for BuiltinScene {
-    fn from(context: RapierContext) -> Self {
-        Self { context }
+impl From<PhysicsState> for BuiltinScene {
+    fn from(state: PhysicsState) -> Self {
+        Self { state }
     }
 }

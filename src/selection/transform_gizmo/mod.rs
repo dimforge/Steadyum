@@ -2,11 +2,10 @@
 // https://github.com/ForesightMiningSoftwareCorporation/bevy_transform_gizmo.
 
 use super::{SceneMouse, SelectableSceneObject, Selection};
-use crate::parry::query;
+use crate::physics::parry::query;
+use crate::physics::{PhysicsState, RbHandle};
 use bevy::asset::load_internal_asset;
-use bevy::render::view::{check_visibility, VisibilitySystems};
-use bevy::{input::InputSystem, prelude::*, transform::TransformSystem};
-use bevy_rapier::dynamics::ReadMassProperties;
+use bevy::{input::InputSystems, prelude::*, transform::TransformSystems};
 use gizmo_material::{GizmoMaterial, GizmoStateMaterials};
 use normalization::*;
 
@@ -40,7 +39,7 @@ pub enum TransformGizmoSystem {
     Drag,
 }
 
-#[derive(Debug, Event)]
+#[derive(Debug, Message)]
 pub struct TransformGizmoEvent {
     pub from: GlobalTransform,
     pub to: GlobalTransform,
@@ -81,7 +80,7 @@ impl Plugin for TransformGizmoPlugin {
         })
         .insert_resource(GizmoSystemsEnabled(true))
         .add_plugins(MaterialPlugin::<GizmoMaterial>::default())
-        .add_event::<TransformGizmoEvent>()
+        .add_message::<TransformGizmoEvent>()
         .add_plugins(Ui3dNormalization)
         .add_systems(
             PreUpdate,
@@ -112,10 +111,10 @@ impl Plugin for TransformGizmoPlugin {
             (
                 drag_gizmo
                     .in_set(TransformGizmoSystem::Drag)
-                    .before(TransformSystem::TransformPropagate),
+                    .before(TransformSystems::Propagate),
                 place_gizmo
                     .in_set(TransformGizmoSystem::Place)
-                    .after(TransformSystem::TransformPropagate),
+                    .after(TransformSystems::Propagate),
                 // propagate_gizmo_elements,
                 // adjust_view_translate_gizmo.in_set(TransformGizmoSystem::Drag),
                 // gizmo_cam_copy_settings.in_set(TransformGizmoSystem::Drag),
@@ -130,50 +129,44 @@ impl Plugin for TransformGizmoPlugin {
             //     .with_system(
             //         drag_gizmo
             //             .label(TransformGizmoSystem::Drag)
-            //             .before(TransformSystem::TransformPropagate),
+            //             .before(TransformSystems::Propagate),
             //     )
             //     .with_system(
             //         place_gizmo
             //             .label(TransformGizmoSystem::Place)
-            //             .before(TransformSystem::TransformPropagate)
+            //             .before(TransformSystems::Propagate)
             //             .after(TransformGizmoSystem::Drag),
             //     ),
         )
         .add_systems(Startup, mesh::build_gizmo)
         .add_systems(PostStartup, place_gizmo)
         .add_systems(Update, sync_gizmo_camera)
-        .add_systems(
-            PostUpdate,
-            check_visibility::<With<TransformGizmo>>.in_set(VisibilitySystems::CheckVisibility),
-        );
+;
     }
 }
 
-#[derive(Bundle)]
-pub struct TransformGizmoBundle {
-    gizmo: TransformGizmo,
-    interaction: Interaction,
-    transform: Transform,
-    global_transform: GlobalTransform,
-    visible: Visibility,
-    inherited_visibility: InheritedVisibility,
-    view_visibility: ViewVisibility,
-    normalize: Normalize3d,
-}
+pub type TransformGizmoBundle = (
+    TransformGizmo,
+    Interaction,
+    Transform,
+    GlobalTransform,
+    Visibility,
+    InheritedVisibility,
+    ViewVisibility,
+    Normalize3d,
+);
 
-impl Default for TransformGizmoBundle {
-    fn default() -> Self {
-        TransformGizmoBundle {
-            transform: Transform::from_translation(Vec3::splat(f32::MIN)),
-            interaction: Interaction::None,
-            visible: Visibility::Hidden,
-            inherited_visibility: InheritedVisibility::default(),
-            view_visibility: ViewVisibility::default(),
-            gizmo: TransformGizmo::default(),
-            global_transform: GlobalTransform::default(),
-            normalize: Normalize3d::new(1.5, 150.0),
-        }
-    }
+pub fn default_transform_gizmo_bundle() -> TransformGizmoBundle {
+    (
+        TransformGizmo::default(),
+        Interaction::None,
+        Transform::from_translation(Vec3::splat(f32::MIN)),
+        GlobalTransform::default(),
+        Visibility::Hidden,
+        InheritedVisibility::default(),
+        ViewVisibility::default(),
+        Normalize3d::new(1.5, 150.0),
+    )
 }
 
 #[derive(Default, PartialEq, Component)]
@@ -211,29 +204,31 @@ struct InitialTransform {
 #[allow(clippy::type_complexity)]
 fn drag_gizmo(
     scene_mouse: Res<SceneMouse>,
+    mut physics: ResMut<PhysicsState>,
     mut gizmo_mut: Query<&mut TransformGizmo>,
     mut transform_queries: ParamSet<(
         Query<(
             &Selection,
             &mut Transform,
             &InitialTransform,
-            Option<&ReadMassProperties>,
+            Option<&RbHandle>,
         )>,
         Query<(&GlobalTransform, &Interaction), With<TransformGizmo>>,
     )>,
 ) {
+    use crate::physics::transform_to_pose;
     #[cfg(feature = "dim2")]
     if let Some(point) = scene_mouse.point {
         use bevy::math::Vec3Swizzles;
 
         let gizmo_transform =
-            if let Ok((transform, &Interaction::Pressed)) = transform_queries.p1().get_single() {
+            if let Ok((transform, &Interaction::Pressed)) = transform_queries.p1().single() {
                 transform.to_owned().compute_transform()
             } else {
                 return;
             };
 
-        let mut gizmo = if let Ok(g) = gizmo_mut.get_single_mut() {
+        let mut gizmo = if let Ok(g) = gizmo_mut.single_mut() {
             g
         } else {
             error!("Number of transform gizmos is != 1");
@@ -269,13 +264,16 @@ fn drag_gizmo(
                     transform_queries
                         .p0()
                         .iter_mut()
-                        .filter(|(s, _t, _i, _mprops)| s.selected())
-                        .for_each(|(_s, mut t, i, _mprops)| {
+                        .filter(|(s, _t, _i, _rb)| s.selected())
+                        .for_each(|(_s, mut t, i, rb_handle)| {
                             let i = i.transform.compute_transform();
                             *t = Transform {
                                 translation: i.translation + translation,
                                 rotation: i.rotation,
                                 scale: i.scale,
+                            };
+                            if let Some(rb) = rb_handle {
+                                physics.set_body_position(rb.0, transform_to_pose(&*t), true);
                             }
                         });
                 }
@@ -295,13 +293,16 @@ fn drag_gizmo(
                     transform_queries
                         .p0()
                         .iter_mut()
-                        .filter(|(s, _t, _i, _mprops)| s.selected())
-                        .for_each(|(_s, mut t, i, _mprops)| {
+                        .filter(|(s, _t, _i, _rb)| s.selected())
+                        .for_each(|(_s, mut t, i, rb_handle)| {
                             let i = i.transform.compute_transform();
                             *t = Transform {
                                 translation: i.translation,
                                 rotation: Quat::from_rotation_z(delta_angle) * i.rotation,
                                 scale: i.scale,
+                            };
+                            if let Some(rb) = rb_handle {
+                                physics.set_body_position(rb.0, transform_to_pose(&*t), true);
                             }
                         });
                 }
@@ -319,7 +320,7 @@ fn drag_gizmo(
         // click point to mouse's current position, onto the axis of the direction we are dragging. See
         // the wiki article for details: https://en.wikipedia.org/wiki/Vector_projection
         let gizmo_transform =
-            if let Ok((transform, &Interaction::Pressed)) = transform_queries.p1().get_single() {
+            if let Ok((transform, &Interaction::Pressed)) = transform_queries.p1().single() {
                 transform.to_owned().compute_transform()
             } else {
                 return;
@@ -327,7 +328,7 @@ fn drag_gizmo(
 
         // println!("Interacting");
 
-        let mut gizmo = if let Ok(g) = gizmo_mut.get_single_mut() {
+        let mut gizmo = if let Ok(g) = gizmo_mut.single_mut() {
             g
         } else {
             error!("Number of transform gizmos is != 1");
@@ -353,8 +354,8 @@ fn drag_gizmo(
                     let plane_normal = axis.cross(vertical_vector).normalize();
                     let plane_origin = gizmo_origin;
                     let cursor_on_plane = if let Some(toi) = query::details::ray_toi_with_halfspace(
-                        &plane_origin.into(),
-                        &plane_normal.into(),
+                        plane_origin.into(),
+                        plane_normal.into(),
                         &query::Ray::new(ray_start.into(), ray_dir.into()),
                     ) {
                         ray_start + ray_dir * toi
@@ -381,20 +382,23 @@ fn drag_gizmo(
                     transform_queries
                         .p0()
                         .iter_mut()
-                        .filter(|(s, _t, _i, _mprops)| s.selected())
-                        .for_each(|(_s, mut t, i, _mprops)| {
+                        .filter(|(s, _t, _i, _rb)| s.selected())
+                        .for_each(|(_s, mut t, i, rb_handle)| {
                             let i = i.transform.compute_transform();
                             *t = Transform {
                                 translation: i.translation + translation,
                                 rotation: i.rotation,
                                 scale: i.scale,
+                            };
+                            if let Some(rb) = rb_handle {
+                                physics.set_body_position(rb.0, transform_to_pose(&*t), true);
                             }
                         });
                 }
                 TransformGizmoInteraction::RotateAxis { original: _, axis } => {
                     let cursor_on_plane = if let Some(toi) = query::details::ray_toi_with_halfspace(
-                        &gizmo_origin.into(),
-                        &axis.normalize().into(),
+                        gizmo_origin.into(),
+                        axis.normalize().into(),
                         &query::Ray::new(ray_start.into(), ray_dir.into()),
                     ) {
                         ray_start + ray_dir * toi
@@ -418,12 +422,18 @@ fn drag_gizmo(
                     transform_queries
                         .p0()
                         .iter_mut()
-                        .filter(|(s, _t, _i, _mprops)| s.selected())
-                        .for_each(|(_s, mut t, i, mprops)| {
+                        .filter(|(s, _t, _i, _rb)| s.selected())
+                        .for_each(|(_s, mut t, i, rb_handle)| {
                             let i = i.transform.compute_transform();
-                            if let Some(mprops) = mprops {
-                                let world_com =
-                                    i.translation + i.rotation * mprops.get().local_center_of_mass;
+                            // rapier center_of_mass is in world coordinates.
+                            // But the initial InitialTransform captured the body's pose at drag start,
+                            // so we compute the COM from initial pose + local_center_of_mass.
+                            let local_com = rb_handle
+                                .and_then(|rb| physics.bodies.get(rb.0))
+                                .map(|body| body.local_center_of_mass());
+                            if let Some(local_com) = local_com {
+                                let local_com: Vec3 = local_com.into();
+                                let world_com = i.translation + i.rotation * local_com;
                                 *t = Transform {
                                     translation: world_com
                                         + rotation * (-world_com + i.translation),
@@ -436,6 +446,9 @@ fn drag_gizmo(
                                     rotation: rotation * i.rotation,
                                     scale: i.scale,
                                 }
+                            }
+                            if let Some(rb) = rb_handle {
+                                physics.set_body_position(rb.0, transform_to_pose(&*t), true);
                             }
                         });
                 }
@@ -451,24 +464,24 @@ fn drag_gizmo(
 fn hover_gizmo(
     scene_mouse: Res<SceneMouse>,
     mut gizmo_query: Query<(&mut TransformGizmo, &mut Interaction)>,
-    hover_query: Query<(&Parent, &TransformGizmoInteraction)>,
+    hover_query: Query<(&ChildOf, &TransformGizmoInteraction)>,
     #[cfg(feature = "dim2")] mut gizmo_materials: Query<(
         &GizmoStateMaterials,
-        &mut Handle<ColorMaterial>,
+        &mut MeshMaterial2d<ColorMaterial>,
     )>,
     #[cfg(feature = "dim3")] mut gizmo_materials: Query<(
         &GizmoStateMaterials,
-        &mut Handle<GizmoMaterial>,
+        &mut MeshMaterial3d<GizmoMaterial>,
     )>,
 ) {
-    if let Ok((gizmo, _)) = gizmo_query.get_single() {
+    if let Ok((gizmo, _)) = gizmo_query.single() {
         if gizmo.initial_transform.is_some() {
             return;
         }
     }
 
     for (mats, mut out_mat) in gizmo_materials.iter_mut() {
-        *out_mat = mats.idle.clone();
+        out_mat.0 = mats.idle.clone();
     }
 
     // NOTE: we only reach this point if we didn’t return earlier
@@ -482,11 +495,11 @@ fn hover_gizmo(
 
     if let Some(SelectableSceneObject::SelectionShape(entity)) = scene_mouse.hovered {
         if let Ok((mats, mut out_mat)) = gizmo_materials.get_mut(entity) {
-            *out_mat = mats.hovered.clone();
+            out_mat.0 = mats.hovered.clone();
         }
 
-        if let Ok((parent, gizmo_interaction)) = hover_query.get(entity) {
-            let (mut gizmo, mut interaction) = gizmo_query.get_mut(parent.get()).unwrap();
+        if let Ok((child_of, gizmo_interaction)) = hover_query.get(entity) {
+            let (mut gizmo, mut interaction) = gizmo_query.get_mut(child_of.parent()).unwrap();
             // if *interaction == Interaction::None {
             // dbg!("Set hover");
             *interaction = Interaction::Hovered;
@@ -503,7 +516,7 @@ fn hover_gizmo(
 fn grab_gizmo(
     mut commands: Commands,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
-    mut gizmo_events: EventWriter<TransformGizmoEvent>,
+    mut gizmo_events: MessageWriter<TransformGizmoEvent>,
     mut gizmo_query: Query<(&mut TransformGizmo, &mut Interaction, &GlobalTransform)>,
     selected_items_query: Query<(&Selection, &GlobalTransform, Entity)>,
     initial_transform_query: Query<Entity, With<InitialTransform>>,
@@ -541,7 +554,7 @@ fn grab_gizmo(
                     interaction,
                 };
                 //info!("{:?}", event);
-                gizmo_events.send(event);
+                gizmo_events.write(event);
                 *gizmo = TransformGizmo::default();
             }
         }
@@ -552,9 +565,10 @@ fn grab_gizmo(
 #[allow(clippy::type_complexity)]
 fn place_gizmo(
     plugin_settings: Res<GizmoSettings>,
+    physics: Res<PhysicsState>,
     mut queries: ParamSet<(
         Query<
-            (&Selection, &GlobalTransform, Option<&ReadMassProperties>),
+            (&Selection, &GlobalTransform, Option<&RbHandle>),
             With<GizmoTransformable>,
         >,
         Query<(&mut GlobalTransform, &mut Transform, &mut Visibility), With<TransformGizmo>>,
@@ -564,26 +578,20 @@ fn place_gizmo(
     let selected: Vec<_> = queries
         .p0()
         .iter()
-        .filter(|(s, _t, _mprops)| s.selected())
-        .map(|(_s, t, mprops)| {
-            let t = t.compute_transform();
-            mprops
-                .map(|mprops| {
-                    #[cfg(feature = "dim2")]
-                    {
-                        t.transform_point(Vec3::new(
-                            mprops.get().local_center_of_mass.x,
-                            mprops.get().local_center_of_mass.y,
-                            0.0,
-                        ))
-                    }
-
-                    #[cfg(feature = "dim3")]
-                    {
-                        t.transform_point(mprops.get().local_center_of_mass)
-                    }
-                })
-                .unwrap_or(t.translation)
+        .filter(|(s, _t, _rb)| s.selected())
+        .map(|(_s, t, rb_handle)| {
+            // rapier's `center_of_mass()` already returns world coordinates.
+            let world_com = rb_handle
+                .and_then(|rb| physics.bodies.get(rb.0))
+                .map(|body| body.center_of_mass());
+            if let Some(world_com) = world_com {
+                #[cfg(feature = "dim2")]
+                { world_com.extend(0.0) }
+                #[cfg(feature = "dim3")]
+                { world_com }
+            } else {
+                t.translation()
+            }
         })
         .collect();
     let n_selected = selected.len();
@@ -591,12 +599,12 @@ fn place_gizmo(
     // NOTE: mut is needed for dim2
     let mut centroid = transform_sum / n_selected as f32;
     // Set the gizmo's position and visibility
-    if let Ok((mut g_transform, mut transform, mut visible)) = queries.p1().get_single_mut() {
+    if let Ok((mut g_transform, mut transform, mut visible)) = queries.p1().single_mut() {
         #[cfg(feature = "dim2")]
         {
             centroid.z = 1e-5; // Keep on top.
 
-            let camera = camera.get_single().unwrap();
+            let camera = camera.single().unwrap();
             transform.scale.x = 120.0 / camera.zoom;
             transform.scale.y = 120.0 / camera.zoom;
         }
@@ -651,8 +659,8 @@ fn sync_gizmo_camera(
     main_cam: Query<(Ref<Camera>, Ref<GlobalTransform>), (With<MainCamera>, Without<GizmoCamera>)>,
     mut gizmo_cam: Query<(&mut Camera, &mut GlobalTransform), With<GizmoCamera>>,
 ) {
-    let (main_cam, main_cam_pos) = main_cam.single();
-    let (mut gizmo_cam, mut gizmo_cam_pos) = gizmo_cam.single_mut();
+    let Ok((main_cam, main_cam_pos)) = main_cam.single() else { return; };
+    let Ok((mut gizmo_cam, mut gizmo_cam_pos)) = gizmo_cam.single_mut() else { return; };
     if main_cam_pos.is_changed() {
         *gizmo_cam_pos = *main_cam_pos;
     }

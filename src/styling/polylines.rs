@@ -1,5 +1,10 @@
 use bevy::prelude::*;
-use bevy_polyline::polyline::Polyline;
+
+/// Simple polyline struct to replace bevy_polyline's Polyline.
+/// Vertices can be drawn with Bevy's gizmos system.
+pub struct Polyline {
+    pub vertices: Vec<Vec3>,
+}
 
 #[cfg(feature = "dim2")]
 pub fn cuboid_polyline() -> Polyline {

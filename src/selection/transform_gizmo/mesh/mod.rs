@@ -1,13 +1,13 @@
 use crate::layers::GIZMO_LAYER;
 use crate::selection::transform_gizmo::{
     gizmo_material::{GizmoMaterial, GizmoStateMaterials},
-    PickableGizmo, TransformGizmoBundle, TransformGizmoInteraction,
+    PickableGizmo, TransformGizmoInteraction, default_transform_gizmo_bundle,
 };
 use crate::selection::SelectionShape;
-use bevy::pbr::NotShadowCaster;
+use crate::physics::SharedShape;
+use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
-use bevy::render::view::RenderLayers;
-use bevy_rapier::geometry::Collider;
+use bevy::camera::visibility::RenderLayers;
 
 mod arrow;
 mod truncated_torus;
@@ -29,7 +29,7 @@ pub fn build_gizmo(
         head_length: 0.2,
     };
     let translation_mesh = meshes.add(Mesh::from(arrow));
-    let translation_selection = SelectionShape::new(Collider::cuboid(
+    let translation_selection = SelectionShape::new(SharedShape::cuboid(
         arrow.head_radius,
         arrow.head_radius + arrow.head_length * 2.0,
     ));
@@ -42,8 +42,8 @@ pub fn build_gizmo(
     }));
     let rotation_selection = SelectionShape {
         translation: Vec2::ZERO,
-        rotation: 0.0,
-        shape: Collider::ball(arc_radius),
+        rotation: crate::physics::Rotation::IDENTITY,
+        shape: SharedShape::ball(arc_radius),
     };
 
     let cube_mesh = meshes.add(Mesh::from(Cuboid::from_size(Vec3::splat(0.1))));
@@ -74,87 +74,88 @@ pub fn build_gizmo(
 
     // Build the gizmo using the variables above.
     commands
-        .spawn(TransformGizmoBundle::default())
+        .spawn(default_transform_gizmo_bundle())
         .with_children(|parent| {
             // Translation Handles
             parent
-                .spawn(ColorMesh2dBundle {
-                    mesh: translation_mesh.clone().into(),
-                    material: gizmo_matl_x.clone(),
-                    transform: Transform::from_matrix(Mat4::from_rotation_translation(
+                .spawn((
+                    Mesh2d(translation_mesh.clone().into()),
+                    MeshMaterial2d(gizmo_matl_x.clone()),
+                    Transform::from_matrix(Mat4::from_rotation_translation(
                         Quat::from_rotation_z(std::f32::consts::PI / -2.0),
                         Vec3::new(axis_length / 2.0 + arc_radius, 0.0, 0.0),
                     )),
-                    ..Default::default()
-                })
+                ))
                 .insert(matls_x.clone())
                 .insert(translation_selection.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::TranslateAxis {
                     original: Vec3::X,
                     axis: Vec3::X,
-                });
+                })
+                .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn(ColorMesh2dBundle {
-                    mesh: translation_mesh.clone().into(),
-                    material: gizmo_matl_y.clone(),
-                    transform: Transform::from_translation(Vec3::new(
+                .spawn((
+                    Mesh2d(translation_mesh.clone().into()),
+                    MeshMaterial2d(gizmo_matl_y.clone()),
+                    Transform::from_translation(Vec3::new(
                         0.0,
                         axis_length / 2.0 + arc_radius,
                         0.0,
                     )),
-                    ..Default::default()
-                })
+                ))
                 .insert(matls_y.clone())
                 .insert(translation_selection.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::TranslateAxis {
                     original: Vec3::Y,
                     axis: Vec3::Y,
-                });
+                })
+                .insert(RenderLayers::layer(GIZMO_LAYER));
 
             // Rotation Arcs
             parent
-                .spawn(ColorMesh2dBundle {
-                    mesh: rotation_mesh.clone().into(),
-                    material: gizmo_matl_z.clone(),
-                    ..Default::default()
-                })
+                .spawn((
+                    Mesh2d(rotation_mesh.clone().into()),
+                    MeshMaterial2d(gizmo_matl_z.clone()),
+                    Transform::default(),
+                ))
                 .insert(matls_z.clone())
                 .insert(rotation_selection.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::RotateAxis {
                     original: Vec3::Z,
                     axis: Vec3::Z,
-                });
+                })
+                .insert(RenderLayers::layer(GIZMO_LAYER));
 
             // Scaling Handles
             parent
-                .spawn(ColorMesh2dBundle {
-                    mesh: cube_mesh.clone().into(),
-                    material: gizmo_matl_x.clone(),
-                    transform: Transform::from_translation(Vec3::new(axis_length + 0.5, 0.0, 0.0)),
-                    ..Default::default()
-                })
+                .spawn((
+                    Mesh2d(cube_mesh.clone().into()),
+                    MeshMaterial2d(gizmo_matl_x.clone()),
+                    Transform::from_translation(Vec3::new(axis_length + 0.5, 0.0, 0.0)),
+                ))
                 .insert(matls_x.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::ScaleAxis {
                     original: Vec3::X,
                     axis: Vec3::X,
-                });
-            parent
-                .spawn(ColorMesh2dBundle {
-                    mesh: cube_mesh.clone().into(),
-                    material: gizmo_matl_y.clone(),
-                    transform: Transform::from_translation(Vec3::new(0.0, axis_length + 0.5, 0.0)),
-                    ..Default::default()
                 })
+                .insert(RenderLayers::layer(GIZMO_LAYER));
+            parent
+                .spawn((
+                    Mesh2d(cube_mesh.clone().into()),
+                    MeshMaterial2d(gizmo_matl_y.clone()),
+                    Transform::from_translation(Vec3::new(0.0, axis_length + 0.5, 0.0)),
+                ))
                 .insert(matls_y.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::ScaleAxis {
                     original: Vec3::Y,
                     axis: Vec3::Y,
-                });
+                })
+                .insert(RenderLayers::layer(GIZMO_LAYER));
         });
 }
 
@@ -176,7 +177,7 @@ pub fn build_gizmo(
     };
     let translation_mesh = meshes.add(Mesh::from(arrow));
     let translation_selection =
-        SelectionShape::new(Collider::capsule_y(axis_length / 2.0, arrow.head_radius));
+        SelectionShape::new(SharedShape::capsule_y(axis_length / 2.0, arrow.head_radius));
 
     // let sphere_mesh = meshes.add(Mesh::from(shape::Icosphere {
     //     radius: 0.02,
@@ -192,7 +193,7 @@ pub fn build_gizmo(
     let rotation_selection = SelectionShape {
         translation: Vec3::new(arc_radius / 1.5, 0.0, arc_radius / 1.5),
         rotation: Quat::IDENTITY,
-        shape: Collider::cuboid(arc_radius / 1.5, ring_radius * 2.0, arc_radius / 1.5),
+        shape: SharedShape::cuboid(arc_radius / 1.5, ring_radius * 2.0, arc_radius / 1.5),
     };
 
     let cube_mesh = meshes.add(Mesh::from(Cuboid::from_size(Vec3::splat(0.1))));
@@ -228,20 +229,19 @@ pub fn build_gizmo(
     });*/
     // Build the gizmo using the variables above.
     commands
-        .spawn(TransformGizmoBundle::default())
+        .spawn(default_transform_gizmo_bundle())
         .insert(Name::new("Transform Gizmo"))
         .with_children(|parent| {
             // Translation Handles
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: translation_mesh.clone(),
-                    material: gizmo_matl_x.clone(),
-                    transform: Transform::from_matrix(Mat4::from_rotation_translation(
+                .spawn((
+                    Mesh3d(translation_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_x.clone()),
+                    Transform::from_matrix(Mat4::from_rotation_translation(
                         Quat::from_rotation_z(std::f32::consts::PI / -2.0),
                         Vec3::new(axis_length, 0.0, 0.0),
                     )),
-                    ..Default::default()
-                })
+                ))
                 .insert(matls_x.clone())
                 .insert(translation_selection.clone())
                 .insert(PickableGizmo::default())
@@ -252,12 +252,11 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: translation_mesh.clone(),
-                    material: gizmo_matl_y.clone(),
-                    transform: Transform::from_translation(Vec3::new(0.0, axis_length, 0.0)),
-                    ..Default::default()
-                })
+                .spawn((
+                    Mesh3d(translation_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_y.clone()),
+                    Transform::from_translation(Vec3::new(0.0, axis_length, 0.0)),
+                ))
                 .insert(matls_y.clone())
                 .insert(translation_selection.clone())
                 .insert(PickableGizmo::default())
@@ -268,15 +267,14 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: translation_mesh.clone(),
-                    material: gizmo_matl_z.clone(),
-                    transform: Transform::from_matrix(Mat4::from_rotation_translation(
+                .spawn((
+                    Mesh3d(translation_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_z.clone()),
+                    Transform::from_matrix(Mat4::from_rotation_translation(
                         Quat::from_rotation_x(std::f32::consts::PI / 2.0),
                         Vec3::new(0.0, 0.0, axis_length),
                     )),
-                    ..Default::default()
-                })
+                ))
                 .insert(matls_z.clone())
                 .insert(translation_selection)
                 .insert(PickableGizmo::default())
@@ -288,15 +286,14 @@ pub fn build_gizmo(
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             // Rotation Arcs
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: rotation_mesh.clone(),
-                    material: gizmo_matl_x.clone(),
-                    transform: Transform::from_rotation(Quat::from_axis_angle(
+                .spawn((
+                    Mesh3d(rotation_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_x.clone()),
+                    Transform::from_rotation(Quat::from_axis_angle(
                         Vec3::Z,
                         f32::to_radians(90.0),
                     )),
-                    ..Default::default()
-                })
+                ))
                 .insert(rotation_selection.clone())
                 .insert(matls_x.clone())
                 .insert(TransformGizmoInteraction::RotateAxis {
@@ -306,11 +303,11 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: rotation_mesh.clone(),
-                    material: gizmo_matl_y.clone(),
-                    ..Default::default()
-                })
+                .spawn((
+                    Mesh3d(rotation_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_y.clone()),
+                    Transform::default(),
+                ))
                 .insert(Name::new("RotateAxis"))
                 .insert(rotation_selection.clone())
                 .insert(matls_y.clone())
@@ -321,15 +318,14 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: rotation_mesh.clone(),
-                    material: gizmo_matl_z.clone(),
-                    transform: Transform::from_rotation(
+                .spawn((
+                    Mesh3d(rotation_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_z.clone()),
+                    Transform::from_rotation(
                         Quat::from_axis_angle(Vec3::Z, f32::to_radians(90.0))
                             * Quat::from_axis_angle(Vec3::X, f32::to_radians(90.0)),
                     ),
-                    ..Default::default()
-                })
+                ))
                 .insert(rotation_selection.clone())
                 .insert(matls_z.clone())
                 .insert(TransformGizmoInteraction::RotateAxis {
@@ -341,12 +337,11 @@ pub fn build_gizmo(
 
             // Scaling Handles
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: cube_mesh.clone(),
-                    material: gizmo_matl_x.clone(),
-                    transform: Transform::from_translation(Vec3::new(axis_length + 0.5, 0.0, 0.0)),
-                    ..Default::default()
-                })
+                .spawn((
+                    Mesh3d(cube_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_x.clone()),
+                    Transform::from_translation(Vec3::new(axis_length + 0.5, 0.0, 0.0)),
+                ))
                 .insert(matls_x.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::ScaleAxis {
@@ -356,12 +351,11 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: cube_mesh.clone(),
-                    material: gizmo_matl_y.clone(),
-                    transform: Transform::from_translation(Vec3::new(0.0, axis_length + 0.5, 0.0)),
-                    ..Default::default()
-                })
+                .spawn((
+                    Mesh3d(cube_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_y.clone()),
+                    Transform::from_translation(Vec3::new(0.0, axis_length + 0.5, 0.0)),
+                ))
                 .insert(matls_y.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::ScaleAxis {
@@ -371,12 +365,11 @@ pub fn build_gizmo(
                 .insert(NotShadowCaster)
                 .insert(RenderLayers::layer(GIZMO_LAYER));
             parent
-                .spawn(MaterialMeshBundle {
-                    mesh: cube_mesh.clone(),
-                    material: gizmo_matl_z.clone(),
-                    transform: Transform::from_translation(Vec3::new(0.0, 0.0, axis_length + 0.5)),
-                    ..Default::default()
-                })
+                .spawn((
+                    Mesh3d(cube_mesh.clone()),
+                    MeshMaterial3d(gizmo_matl_z.clone()),
+                    Transform::from_translation(Vec3::new(0.0, 0.0, axis_length + 0.5)),
+                ))
                 .insert(matls_z.clone())
                 .insert(PickableGizmo::default())
                 .insert(TransformGizmoInteraction::ScaleAxis {

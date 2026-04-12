@@ -1,13 +1,13 @@
 use crate::builtin_scenes::BuiltinScene;
-use bevy_rapier::prelude::RapierContext;
-use bevy_rapier3d::rapier::prelude::*;
+use crate::physics::PhysicsState;
+use crate::physics::rapier::prelude::*;
 use std::collections::HashMap;
 
 pub fn init_world() -> BuiltinScene {
     /*
      * World
      */
-    let mut result = RapierContext::default();
+    let mut result = PhysicsState::default();
 
     /*
      * Ground
@@ -20,5 +20,5 @@ pub fn init_world() -> BuiltinScene {
         .colliders
         .insert_with_parent(ColliderBuilder::ball(1.0), body, &mut result.bodies);
 
-    BuiltinScene { context: result }
+    BuiltinScene { state: result }
 }

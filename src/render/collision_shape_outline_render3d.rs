@@ -1,106 +1,65 @@
 use crate::cli::CliArgs;
-use crate::render::{ColliderOutlineRender, ColliderRenderTargets};
+use crate::render::ColliderOutlineRender;
 use bevy::prelude::*;
-use bevy_polyline::prelude::*;
-use bevy_rapier::prelude::{Collider, ColliderView};
-use bevy_rapier::rapier::math::{Point, Real};
+use crate::physics::{ColHandle, PhysicsState};
+use crate::physics::parry::shape::TypedShape;
 
+/// System that draws collider outlines using Bevy gizmos each frame.
+/// Replaces the old bevy_polyline-based approach.
 pub fn create_collider_outline_renders_system(
-    mut commands: Commands,
     cli: Res<CliArgs>,
-    mut polylines: ResMut<Assets<Polyline>>,
-    mut materials: ResMut<Assets<PolylineMaterial>>,
-    mut coll_shape_render: Query<
+    physics: Res<PhysicsState>,
+    mut gizmos: Gizmos,
+    coll_shape_render: Query<
         (
             Entity,
-            &Collider,
+            &ColHandle,
             &ColliderOutlineRender,
-            &mut ColliderRenderTargets,
         ),
-        Or<(Changed<Collider>, Changed<ColliderOutlineRender>)>,
     >,
-    existing_entities: Query<Entity>,
-    old_transform: Query<&Transform>,
 ) {
     if cli.lower_graphics {
         return;
     }
 
-    for (entity, collider, render, mut render_target) in coll_shape_render.iter_mut() {
-        if let Some(polyline) = generate_collision_shape_render_outline(collider) {
-            let material = PolylineMaterial {
-                color: render.color,
-                width: render.thickness,
-                perspective: true,
-                ..Default::default()
-            };
+    for (_entity, col_handle, render) in coll_shape_render.iter() {
+        let Some(collider) = physics.colliders.get(col_handle.0) else {
+            continue;
+        };
 
-            let mut bundle = PolylineBundle {
-                polyline: polylines.add(polyline),
-                material: materials.add(material),
-                ..Default::default()
-            };
+        if let Some((vertices, indices)) = generate_collision_shape_outline(collider) {
+            let pos = collider.position();
+            let translation = pos.translation;
+            let rotation: Quat = pos.rotation.into();
 
-            if let Some(target) = render_target.outline_target {
-                if existing_entities.get(target).is_ok() {
-                    let old_transform = old_transform.get(target).unwrap();
-                    bundle.transform = *old_transform;
-                    commands.entity(target).insert(bundle);
-                }
-            } else {
-                let target = commands.entity(entity).with_children(|cmd| {
-                    let target = cmd
-                        .spawn(bundle)
-                        .insert(Name::new("Collider Outlines"))
-                        .id();
-                    render_target.outline_target = Some(target);
-                });
+            for idx in &indices {
+                let a = translation + rotation * vertices[idx[0] as usize];
+                let b = translation + rotation * vertices[idx[1] as usize];
+                gizmos.line(a, b, render.color);
             }
         }
     }
 }
 
-fn generate_collision_shape_render_outline(collider: &Collider) -> Option<Polyline> {
+fn generate_collision_shape_outline(
+    collider: &crate::physics::rapier::prelude::Collider,
+) -> Option<(Vec<Vec3>, Vec<[u32; 2]>)> {
     const NSUB: u32 = 20;
 
-    let (vertices, indices) = match collider.as_unscaled_typed_shape() {
-        ColliderView::Cuboid(s) => s.raw.to_outline(),
-        ColliderView::Ball(s) => s.raw.to_outline(NSUB),
-        ColliderView::Cylinder(s) => s.raw.to_outline(NSUB),
-        ColliderView::Cone(s) => s.raw.to_outline(NSUB),
-        ColliderView::Capsule(s) => s.raw.to_outline(NSUB),
+    let (vertices, indices) = match collider.shape().as_typed_shape() {
+        TypedShape::Cuboid(s) => s.to_outline(),
+        TypedShape::Ball(s) => s.to_outline(NSUB),
+        TypedShape::Cylinder(s) => s.to_outline(NSUB),
+        TypedShape::Cone(s) => s.to_outline(NSUB),
+        TypedShape::Capsule(s) => s.to_outline(NSUB),
         #[cfg(feature = "voxels")]
-        ColliderView::Voxels(s) => s.raw.to_outline(),
-        ColliderView::ConvexPolyhedron(_s) => todo!(),
-        // ColliderView::Compound(s) => s.raw.to_trimesh(),
-        ColliderView::HeightField(_s) => return None,
-        // ColliderView::Polyline(s) => s.raw.to_trimesh(),
-        // ColliderView::Triangle(s) => s.raw.to_trimesh(),
-        ColliderView::HalfSpace(_s) => {
-            todo!()
-        }
-        ColliderView::TriMesh(_s) => return None,
-        _ => todo!(),
+        TypedShape::Voxels(s) => s.to_outline(),
+        TypedShape::ConvexPolyhedron(_s) => return None, // TODO
+        TypedShape::HeightField(_s) => return None,
+        TypedShape::HalfSpace(_s) => return None, // TODO
+        TypedShape::TriMesh(_s) => return None,
+        _ => return None,
     };
 
-    Some(gen_bevy_polyline(&vertices, &indices))
-}
-
-fn gen_bevy_polyline(pts: &[Point<Real>], indices: &[[u32; 2]]) -> Polyline {
-    let mut vertices = vec![];
-    let mut last_id = indices[0][0];
-
-    for idx in indices {
-        if last_id == idx[0] {
-            vertices.push(pts[idx[0] as usize].into());
-        } else {
-            // Break the polyline by inserting an invalid point.
-            vertices.push(Vec3::splat(f32::NAN));
-            vertices.push(pts[idx[0] as usize].into());
-        }
-        vertices.push(pts[idx[1] as usize].into());
-        last_id = idx[1];
-    }
-
-    Polyline { vertices }
+    Some((vertices, indices))
 }

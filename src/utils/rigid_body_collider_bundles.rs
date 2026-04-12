@@ -1,47 +1,27 @@
 use crate::render::{ColliderOutlineRender, ColliderRender};
 use crate::styling::ColorGenerator;
 use bevy::prelude::*;
-use bevy_rapier::prelude::*;
-use bevy_rapier::rapier::dynamics::RigidBody as RapierRigidBody;
-use bevy_rapier::rapier::geometry::Collider as RapierCollider;
+use crate::physics::*;
+use crate::physics::rapier::dynamics::RigidBody as RapierRigidBody;
+use crate::physics::rapier::geometry::Collider as RapierCollider;
 
-pub type RigidBodyComponentsMut<'a> = (
-    Entity,
-    &'a mut RigidBody,
-    Option<&'a mut Velocity>,
-    Option<&'a mut AdditionalMassProperties>,
-    Option<&'a mut LockedAxes>,
-    Option<&'a mut ExternalForce>,
-    Option<&'a mut GravityScale>,
-    Option<&'a mut Ccd>,
-    Option<&'a mut Dominance>,
-    Option<&'a mut Sleeping>,
-    Option<&'a RigidBodyDisabled>,
-    Option<&'a ReadMassProperties>,
-);
-
-pub type ColliderComponentsMut<'a> = (
-    Entity,
-    &'a mut Collider,
-    Option<&'a mut Sensor>,
-    Option<&'a mut ColliderMassProperties>,
-    Option<&'a mut CollisionGroups>,
-    Option<&'a ColliderDisabled>,
-);
-
-#[derive(Clone, Bundle, Default)]
+/// Data needed to construct a rapier collider.
+/// Not a Bevy Bundle -- used to pass collider creation data around,
+/// then inserted into PhysicsState directly.
+#[derive(Clone)]
 pub struct ColliderBundle {
     pub collider: Collider,
-    pub mass_properties: ColliderMassProperties,
-    pub collision_groups: CollisionGroups,
+    /// Override density for the collider (None = use default).
+    pub density: Option<f32>,
+    pub collision_groups: Option<InteractionGroups>,
 }
 
 impl ColliderBundle {
     pub fn new(collider: Collider) -> Self {
         Self {
             collider,
-            mass_properties: Default::default(),
-            collision_groups: Default::default(),
+            density: None,
+            collision_groups: None,
         }
     }
 }
@@ -49,18 +29,19 @@ impl ColliderBundle {
 impl<'a> From<&'a RapierCollider> for ColliderBundle {
     fn from(value: &'a RapierCollider) -> Self {
         Self {
-            collider: Collider::from(value.shared_shape().clone()),
-            mass_properties: Default::default(),  // FIXME
-            collision_groups: Default::default(), // FIXME
+            collider: ColliderBuilder::new(value.shared_shape().clone()).build(),
+            density: None,  // FIXME
+            collision_groups: None,  // FIXME
         }
     }
 }
 
-#[derive(Default, Bundle)]
+/// Render components for a collider entity.
+/// No longer a Bundle -- just a convenient grouping of render components.
+#[derive(Default)]
 pub struct ColliderRenderBundle {
     pub render: ColliderRender,
     pub render_outline: ColliderOutlineRender,
-    pub visibility: VisibilityBundle,
 }
 
 impl Clone for ColliderRenderBundle {
@@ -68,11 +49,6 @@ impl Clone for ColliderRenderBundle {
         Self {
             render: self.render.clone(),
             render_outline: self.render_outline.clone(),
-            visibility: VisibilityBundle {
-                visibility: self.visibility.visibility.clone(),
-                inherited_visibility: self.visibility.inherited_visibility.clone(),
-                view_visibility: self.visibility.view_visibility.clone(),
-            },
         }
     }
 }
@@ -84,77 +60,116 @@ impl ColliderRenderBundle {
         Self {
             render: ColliderRender::from(color),
             render_outline: ColliderOutlineRender::new(outline_color, 0.02),
-            ..Default::default()
         }
+    }
+
+    /// Insert these render components (plus Visibility) into a Bevy entity.
+    pub fn insert_into(self, commands: &mut EntityCommands) {
+        commands.insert((
+            self.render,
+            self.render_outline,
+            Visibility::default(),
+        ));
     }
 }
 
-#[derive(Copy, Clone, Default, Bundle)]
+/// Data needed to construct a rapier rigid body.
+/// Not a Bevy Bundle -- used to pass rigid body creation data around,
+/// then inserted into PhysicsState directly.
+#[derive(Copy, Clone)]
 pub struct RigidBodyBundle {
-    pub rigid_body: RigidBody,
-    pub velocity: Velocity,
-    pub additional_mass_properties: AdditionalMassProperties,
-    pub mass_properties: ReadMassProperties,
-    pub locked_axes: LockedAxes,
-    pub forces: ExternalForce,
-    pub gravity_scale: GravityScale,
-    pub ccd: Ccd,
-    pub dominance: Dominance,
-    pub sleeping: Sleeping,
-    pub damping: Damping,
+    pub rigid_body_type: RigidBodyType,
+    pub linvel: Vect,
+    #[cfg(feature = "dim2")]
+    pub angvel: f32,
+    #[cfg(feature = "dim3")]
+    pub angvel: Vect,
+    pub gravity_scale: f32,
+    pub ccd_enabled: bool,
+    pub dominance: i8,
+    pub sleeping: bool,
+    pub linear_damping: f32,
+    pub angular_damping: f32,
+}
+
+impl Default for RigidBodyBundle {
+    fn default() -> Self {
+        Self {
+            rigid_body_type: RigidBodyType::Dynamic,
+            linvel: Vect::ZERO,
+            #[cfg(feature = "dim2")]
+            angvel: 0.0,
+            #[cfg(feature = "dim3")]
+            angvel: Vect::ZERO,
+            gravity_scale: 1.0,
+            ccd_enabled: false,
+            dominance: 0,
+            sleeping: false,
+            linear_damping: 0.0,
+            angular_damping: 0.0,
+        }
+    }
 }
 
 impl RigidBodyBundle {
     pub fn dynamic() -> Self {
         Self {
-            rigid_body: RigidBody::Dynamic,
+            rigid_body_type: RigidBodyType::Dynamic,
+            gravity_scale: 1.0,
             ..Default::default()
         }
     }
 
     pub fn fixed() -> Self {
         Self {
-            rigid_body: RigidBody::Fixed,
+            rigid_body_type: RigidBodyType::Fixed,
+            gravity_scale: 1.0,
             ..Default::default()
         }
     }
 
     pub fn kinematic_position_based() -> Self {
         Self {
-            rigid_body: RigidBody::KinematicPositionBased,
+            rigid_body_type: RigidBodyType::KinematicPositionBased,
+            gravity_scale: 1.0,
             ..Default::default()
         }
     }
 
     pub fn kinematic_velocity_based() -> Self {
         Self {
-            rigid_body: RigidBody::KinematicVelocityBased,
+            rigid_body_type: RigidBodyType::KinematicVelocityBased,
+            gravity_scale: 1.0,
             ..Default::default()
         }
+    }
+
+    /// Build a rapier `RigidBodyBuilder` from this bundle's data.
+    pub fn into_builder(self) -> RigidBodyBuilder {
+        RigidBodyBuilder::new(self.rigid_body_type)
+            .linvel(self.linvel)
+            .angvel(self.angvel)
+            .gravity_scale(self.gravity_scale)
+            .ccd_enabled(self.ccd_enabled)
+            .dominance_group(self.dominance)
+            .sleeping(self.sleeping)
+            .linear_damping(self.linear_damping)
+            .angular_damping(self.angular_damping)
     }
 }
 
 impl<'a> From<&'a RapierRigidBody> for RigidBodyBundle {
     fn from(value: &'a RapierRigidBody) -> Self {
         Self {
-            rigid_body: value.body_type().into(),
-            velocity: Velocity {
-                linvel: (*value.linvel()).into(),
-                #[cfg(feature = "dim2")]
-                angvel: value.angvel(),
-                #[cfg(feature = "dim3")]
-                angvel: (*value.angvel()).into(),
-            },
-            // additional_mass_properties: AdditionalMassProperties,
-            // mass_properties: ReadMassProperties,
-            // locked_axes: LockedAxes,
-            // forces: ExternalForce,
-            // gravity_scale: GravityScale,
-            // ccd: Ccd,
-            // dominance: Dominance,
-            // sleeping: Sleeping,
-            // damping: Damping,
-            ..Default::default()
+            rigid_body_type: value.body_type(),
+            linvel: value.linvel(),
+            angvel: value.angvel(),
+            gravity_scale: value.gravity_scale(),
+            ccd_enabled: value.is_ccd_enabled(),
+            dominance: value.dominance_group(),
+            sleeping: value.is_sleeping(),
+            linear_damping: value.linear_damping(),
+            angular_damping: value.angular_damping(),
         }
     }
 }

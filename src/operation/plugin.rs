@@ -7,7 +7,10 @@ pub struct RapierOperationsPlugin;
 impl Plugin for RapierOperationsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(Operations::default())
-            .add_systems(Last, clear_operations)
+            .add_systems(
+                Update,
+                clear_operations.after(RenderSystems::ProcessCommands),
+            )
             .add_systems(
                 Update,
                 operation::add_plane.in_set(RenderSystems::ProcessCommands),

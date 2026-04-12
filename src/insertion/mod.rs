@@ -2,17 +2,11 @@ use crate::operation::Operation;
 use crate::ui::SelectedTool;
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::*;
-use bevy_prototype_lyon::draw::Stroke;
-use bevy_prototype_lyon::entity::ShapeBundle;
-use bevy_rapier::dynamics::RigidBody;
-use bevy_rapier::rapier::math::DIM;
-use bevy_rapier::{geometry::Collider, math::Vect};
+use crate::physics::{ColliderBuilder, SharedShape, Vect, DIM, RigidBodyType};
 
 use crate::render::RenderSystems;
 use crate::utils::{ColliderBundle, RigidBodyBundle};
-#[cfg(feature = "dim3")]
-use bevy_polyline::prelude::*;
-use na::DMatrix;
+use crate::physics::parry::utils::Array2;
 use noise::{NoiseFn, Perlin};
 
 pub(self) const ACTIVE_EPS: f32 = 1.0e-1;
@@ -21,6 +15,10 @@ mod mouse;
 
 #[derive(Component)]
 pub struct InsertionPreview;
+
+/// Marker component for entities that draw a gizmo-based insertion preview.
+#[derive(Component)]
+pub struct InsertionGizmoPreview;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum InsertionStep {
@@ -32,7 +30,7 @@ pub enum InsertionStep {
 #[derive(Default, Clone, Resource)]
 pub struct InsertionState {
     pub step: Option<InsertionStep>,
-    pub preview_shape: Option<Collider>,
+    pub preview_shape: Option<SharedShape>,
     pub basis: [Vect; DIM], // X, Y, Z
     pub start_point: Vect,
     pub end_point: Vect,
@@ -120,14 +118,14 @@ impl InsertionState {
     }
 
     pub fn operation(&self) -> Operation {
-        let rigid_body = if self.on_empty_ground {
-            RigidBody::Fixed
+        let rigid_body_type = if self.on_empty_ground {
+            RigidBodyType::Fixed
         } else {
-            RigidBody::Dynamic
+            RigidBodyType::Dynamic
         };
 
         let mut transform = self.transform();
-        let mut collider = self.preview_shape.clone().unwrap();
+        let mut collider_shape = self.preview_shape.clone().unwrap();
 
         // For the capsule, we need to make a special-case so we
         // actually get a capsule if the scale is only non-uniform along
@@ -136,7 +134,7 @@ impl InsertionState {
             if (cfg!(feature = "dim2") || transform.scale.x == transform.scale.z)
                 && transform.scale.y > transform.scale.x
             {
-                collider = Collider::capsule_y(
+                collider_shape = SharedShape::capsule_y(
                     (transform.scale.y - transform.scale.x) / 2.0,
                     transform.scale.x / 2.0,
                 );
@@ -144,7 +142,7 @@ impl InsertionState {
             } else {
                 let diameter = transform.scale.x.max(transform.scale.z);
                 let height = (transform.scale.y - diameter).max(1.0e-3);
-                collider = Collider::capsule_y(height / 2.0, diameter / 2.0);
+                collider_shape = SharedShape::capsule_y(height / 2.0, diameter / 2.0);
                 transform.scale.x /= diameter;
                 transform.scale.y /= height + diameter;
 
@@ -158,31 +156,32 @@ impl InsertionState {
             #[cfg(feature = "dim2")]
             {
                 let num_rows = 100;
-                let heights = (0..num_rows)
+                let heights: Vec<f32> = (0..num_rows)
                     .map(|i| perlin.get([i as f64 / 100.0, 0.0]) as f32)
                     .collect();
-                collider = Collider::heightfield(heights, Vec2::ONE);
+                collider_shape = SharedShape::heightfield(heights, Vect::ONE);
             }
 
             #[cfg(feature = "dim3")]
             {
                 let (num_rows, num_cols) = (100, 100);
-                let heights = DMatrix::from_fn(num_rows, num_cols, |i, j| {
-                    perlin.get([i as f64 / 100.0, j as f64 / 100.0]) as f32
-                });
-                collider = Collider::heightfield(
-                    heights.data.as_vec().clone(),
-                    num_rows,
-                    num_cols,
-                    Vec3::ONE,
-                );
+                let mut heights_data = Vec::with_capacity(num_rows * num_cols);
+                for i in 0..num_rows {
+                    for j in 0..num_cols {
+                        heights_data.push(perlin.get([i as f64 / 100.0, j as f64 / 100.0]) as f32);
+                    }
+                }
+                let heights = Array2::new(num_rows, num_cols, heights_data);
+                collider_shape = SharedShape::heightfield(heights, Vec3::ONE);
             }
         }
+
+        let collider = ColliderBuilder::new(collider_shape).build();
 
         Operation::AddCollider(
             ColliderBundle::new(collider),
             RigidBodyBundle {
-                rigid_body,
+                rigid_body_type,
                 ..Default::default()
             },
             transform,
@@ -196,22 +195,22 @@ impl InsertionState {
             match self.tool {
                 #[cfg(feature = "dim2")]
                 SelectedTool::AddCuboid | SelectedTool::AddHeightfield => {
-                    self.preview_shape = Some(Collider::cuboid(0.5, 0.5))
+                    self.preview_shape = Some(SharedShape::cuboid(0.5, 0.5))
                 }
                 #[cfg(feature = "dim3")]
                 SelectedTool::AddCuboid | SelectedTool::AddHeightfield => {
-                    self.preview_shape = Some(Collider::cuboid(0.5, 0.5, 0.5))
+                    self.preview_shape = Some(SharedShape::cuboid(0.5, 0.5, 0.5))
                 }
-                SelectedTool::AddBall => self.preview_shape = Some(Collider::ball(0.5)),
+                SelectedTool::AddBall => self.preview_shape = Some(SharedShape::ball(0.5)),
                 SelectedTool::AddCapsule => {
-                    self.preview_shape = Some(Collider::capsule_y(0.25, 0.25))
+                    self.preview_shape = Some(SharedShape::capsule_y(0.25, 0.25))
                 }
                 #[cfg(feature = "dim3")]
                 SelectedTool::AddCylinder => {
-                    self.preview_shape = Some(Collider::cylinder(0.5, 0.5))
+                    self.preview_shape = Some(SharedShape::cylinder(0.5, 0.5))
                 }
                 #[cfg(feature = "dim3")]
-                SelectedTool::AddCone => self.preview_shape = Some(Collider::cone(0.5, 0.5)),
+                SelectedTool::AddCone => self.preview_shape = Some(SharedShape::cone(0.5, 0.5)),
                 _ => self.preview_shape = None,
             }
         }
@@ -236,24 +235,13 @@ impl Plugin for InsertionPlugin {
 }
 
 #[cfg(feature = "dim3")]
-fn spawn_preview_entity(
-    mut commands: Commands,
-    mut polylines: ResMut<Assets<Polyline>>,
-    mut polyline_materials: ResMut<Assets<PolylineMaterial>>,
-) {
-    let polyline = PolylineBundle {
-        polyline: polylines.add(crate::styling::cuboid_polyline()),
-        material: polyline_materials.add(PolylineMaterial {
-            width: 20.0,
-            perspective: true,
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-
+fn spawn_preview_entity(mut commands: Commands) {
+    // Use a simple marker entity. The actual wireframe preview
+    // will be drawn via Bevy gizmos each frame in update_preview_scale.
     commands
-        .spawn(polyline)
-        .insert(InsertionPreview)
+        .spawn(InsertionPreview)
+        .insert(InsertionGizmoPreview)
+        .insert(Transform::default())
         .insert(Visibility::Hidden);
 }
 
@@ -270,11 +258,8 @@ fn spawn_preview_entity(mut commands: Commands) {
 pub fn preview_shape_bundle(
     scale: Vect,
     color: Color,
-) -> (
-    bevy_prototype_lyon::entity::ShapeBundle,
-    bevy_prototype_lyon::prelude::Stroke,
-) {
-    use bevy_prototype_lyon::prelude::{GeometryBuilder, ShapeBundle, Stroke};
+) -> bevy_prototype_lyon::entity::Shape {
+    use bevy_prototype_lyon::prelude::{ShapeBuilder, ShapeBuilderBase, Stroke};
 
     let polyline = crate::styling::cuboid_polyline();
     let polygon = bevy_prototype_lyon::shapes::Polygon {
@@ -282,11 +267,7 @@ pub fn preview_shape_bundle(
         closed: true,
     };
 
-    (
-        ShapeBundle {
-            path: GeometryBuilder::build_as(&polygon),
-            ..default()
-        },
-        Stroke::new(color, 0.01),
-    )
+    ShapeBuilder::with(&polygon)
+        .stroke(Stroke::new(color, 0.01))
+        .build()
 }

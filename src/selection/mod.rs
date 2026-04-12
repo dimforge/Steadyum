@@ -1,7 +1,6 @@
 use bevy::app::PluginGroupBuilder;
 use bevy::prelude::*;
-use bevy::render::view::{check_visibility, VisibilitySystems};
-use bevy_rapier::prelude::*;
+use crate::physics::{ColHandle, RbHandle, RayIntersection, Vect};
 
 pub use self::selection_shape::SelectionShape;
 
@@ -51,17 +50,13 @@ impl Plugin for SelectionPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(SelectionState::default())
             .insert_resource(SceneMouse::default())
-            .add_systems(Update, add_missing_selection_components)
-            .add_systems(
-                PostUpdate,
-                check_visibility::<With<Selection>>.in_set(VisibilitySystems::CheckVisibility),
-            );
+            .add_systems(Update, add_missing_selection_components);
     }
 }
 
 fn add_missing_selection_components(
     mut commands: Commands,
-    missing: Query<Entity, (Without<Selection>, Or<(With<Collider>, With<RigidBody>)>)>,
+    missing: Query<Entity, (Without<Selection>, Or<(With<ColHandle>, With<RbHandle>)>)>,
 ) {
     for entity in missing.iter() {
         commands.entity(entity).insert(Selection::default());

@@ -5,7 +5,7 @@ use crate::ui::{ActiveMouseAction, SelectedTool, UiState};
 use bevy::prelude::*;
 
 #[cfg(feature = "dim3")]
-use {crate::selection::SelectableSceneObject, bevy_rapier::rapier::utils::SimdBasis};
+use crate::selection::SelectableSceneObject;
 
 pub fn handle_insertion_click(
     mut commands: Commands,
@@ -43,7 +43,7 @@ pub fn handle_insertion_click(
         insertion_state.unlocked_scaling = false;
     }
 
-    let (preview_entity, _) = preview.get_single().unwrap();
+    let (preview_entity, _) = preview.single().unwrap();
 
     if !reset {
         if mouse.just_pressed(MouseButton::Left) {
@@ -70,7 +70,7 @@ pub fn handle_insertion_click(
                             .insert(insertion_state.transform())
                             .insert(GlobalTransform::default());
                     } else {
-                        // Reset to a random tool we don’t use, just to reset the selection shape.
+                        // Reset to a random tool we don't use, just to reset the selection shape.
                         insertion_state.set_tool(SelectedTool::Translate);
                     }
                 }
@@ -83,14 +83,16 @@ pub fn handle_insertion_click(
                     if let Some(SelectableSceneObject::Collider(entity, inter)) =
                         scene_mouse.hovered
                     {
+                        let (ray_pos, ray_dir) = scene_mouse.ray.unwrap();
+                        let hit_point = ray_pos + ray_dir * inter.time_of_impact;
                         let transform = transforms.get(entity).unwrap();
-                        let local_normal: na::Vector3<_> =
-                            (transform.rotation.inverse() * inter.normal).into();
-                        let local_basis_xz = local_normal.orthonormal_basis();
+                        let local_normal =
+                            transform.rotation.inverse() * inter.normal;
+                        let local_basis_xz = local_normal.any_orthonormal_pair();
                         let local_basis: [Vec3; 3] = [
-                            local_basis_xz[1].into(),
-                            local_normal.into(),
-                            local_basis_xz[0].into(),
+                            local_basis_xz.1,
+                            local_normal,
+                            local_basis_xz.0,
                         ];
                         let basis = [
                             transform.rotation * local_basis[0],
@@ -98,7 +100,7 @@ pub fn handle_insertion_click(
                             transform.rotation * local_basis[2],
                         ];
 
-                        insertion_state.start_point = inter.point;
+                        insertion_state.start_point = hit_point;
                         insertion_state.basis = basis;
                         insertion_state.step = Some(InsertionStep::Basis);
                         insertion_state.on_empty_ground = false;
@@ -126,7 +128,7 @@ pub fn handle_insertion_click(
                             .insert(insertion_state.transform())
                             .insert(GlobalTransform::default());
                     } else {
-                        // Reset to a random tool we don’t use, just to reset the selection shape.
+                        // Reset to a random tool we don't use, just to reset the selection shape.
                         insertion_state.set_tool(SelectedTool::Translate);
                     }
                 }
@@ -164,7 +166,7 @@ pub fn handle_insertion_click(
                     }
                 }
                 #[cfg(feature = "dim3")]
-                Some(InsertionStep::Height) => { /* Noting to do, but don’t reset. */ }
+                Some(InsertionStep::Height) => { /* Nothing to do, but don't reset. */ }
                 #[cfg(feature = "dim3")]
                 Some(InsertionStep::Orientation) => {
                     if !insertion_state.intersects_environment {

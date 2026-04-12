@@ -1,15 +1,10 @@
 use crate::render::{ColliderRender, ColliderRenderTargets};
 use bevy::prelude::*;
-use bevy::render::mesh::{Indices, VertexAttributeValues};
-use bevy_rapier::geometry::{Collider, ColliderView};
-use bevy_rapier::rapier::math::{Point, Real, Vector};
-use na::{point, UnitQuaternion};
+use bevy::mesh::{Indices, VertexAttributeValues};
 
 use crate::cli::CliArgs;
-use crate::parry::shape::Cuboid;
-#[cfg(feature = "dim2")]
-use bevy::sprite::MaterialMesh2dBundle;
-use bevy_egui::egui::ahash::HashMap;
+use crate::physics::{ColHandle, PhysicsState};
+use crate::physics::parry::shape::{Cuboid, TypedShape};
 
 #[derive(Resource, Default, Clone)]
 pub struct CollisionShapeMeshInstances {
@@ -34,7 +29,8 @@ pub struct RenderInitialized;
 /// System responsible for attaching a PbrBundle to each entity having a collider.
 pub fn create_collider_renders_system(
     mut commands: Commands,
-    cli: Res<CliArgs>,
+    _cli: Res<CliArgs>,
+    physics: Res<PhysicsState>,
     mut instances: ResMut<CollisionShapeMeshInstances>,
     mut meshes: ResMut<Assets<Mesh>>,
     #[cfg(feature = "dim2")] mut materials: ResMut<Assets<ColorMaterial>>,
@@ -42,48 +38,52 @@ pub fn create_collider_renders_system(
     mut coll_shape_render: Query<
         (
             Entity,
-            &Collider,
+            &ColHandle,
             &ColliderRender,
             &mut ColliderRenderTargets,
         ),
         Or<(Changed<ColliderRender>, Without<RenderInitialized>)>,
-        // Or<(Changed<Collider>, Changed<ColliderRender>)>,
     >,
     existing_entities: Query<Entity>,
-    old_transform: Query<&Transform>, // FIXME: we shouldn’t need this, but right now collider renders get triggered each frame for some reasons.
+    old_transform: Query<&Transform>,
 ) {
-    for (entity, collider, render, mut render_target) in coll_shape_render.iter_mut() {
-        commands.entity(entity).insert(RenderInitialized); // FIXME: not sure what this is needed. Change detection for Changed<ColliderRender> should be enough.
+    for (entity, col_handle, render, mut render_target) in coll_shape_render.iter_mut() {
+        let Some(collider) = physics.colliders.get(col_handle.0) else {
+            continue;
+        };
+
+        commands.entity(entity).insert(RenderInitialized);
         if let Some(mesh) =
             generate_collision_shape_render_mesh(collider, &mut *meshes, &mut instances)
         {
-            // println!("Rendering with color: {:?}", render.color);
-
             #[cfg(feature = "dim2")]
             {
-                if let ColliderView::Cuboid(s) = collider.as_unscaled_typed_shape() {
-                    #[cfg(feature = "dim2")]
-                    let mut bundle = SpriteBundle {
-                        sprite: Sprite {
+                if let TypedShape::Cuboid(s) = collider.shape().as_typed_shape() {
+                    let half = s.half_extents;
+                    let sprite_bundle = (
+                        Sprite {
                             color: render.color.into(),
-                            custom_size: Some(Vec2::new(
-                                s.half_extents().x * 2.0,
-                                s.half_extents().y * 2.0,
-                            )),
+                            custom_size: Some(Vec2::new(half.x * 2.0, half.y * 2.0)),
                             ..default()
                         },
-                        ..default()
-                    };
+                        Transform::default(),
+                    );
 
                     if let Some(target) = render_target.target {
                         if existing_entities.get(target).is_ok() {
                             let old_transform = old_transform.get(target).unwrap();
-                            bundle.transform = *old_transform;
-                            commands.entity(target).insert(bundle);
+                            commands.entity(target).insert((
+                                Sprite {
+                                    color: render.color.into(),
+                                    custom_size: Some(Vec2::new(half.x * 2.0, half.y * 2.0)),
+                                    ..default()
+                                },
+                                *old_transform,
+                            ));
                         }
                     } else {
                         commands.entity(entity).with_children(|cmd| {
-                            let target = cmd.spawn(bundle).id();
+                            let target = cmd.spawn(sprite_bundle).id();
                             render_target.target = Some(target);
                         });
                     }
@@ -92,15 +92,14 @@ pub fn create_collider_renders_system(
             }
 
             #[cfg(feature = "dim2")]
-            let mut bundle = MaterialMesh2dBundle {
-                mesh: mesh.into(),
-                material: materials.add(ColorMaterial::from(render.color)),
-                transform: Transform::from_xyz(0.0, 0.0, (entity.index() + 1) as f32 * 1.0001e-9),
-                ..Default::default()
-            };
+            let bundle = (
+                Mesh2d(mesh.into()),
+                MeshMaterial2d(materials.add(ColorMaterial::from(render.color))),
+                Transform::from_xyz(0.0, 0.0, (entity.index().index() + 1) as f32 * 1.0001e-9),
+            );
 
             #[cfg(feature = "dim3")]
-            let mut bundle = {
+            let bundle = {
                 let mut material: StandardMaterial = render.color.into();
                 material.double_sided = true;
 
@@ -111,18 +110,33 @@ pub fn create_collider_renders_system(
                     .map(|(_, m)| m.clone())
                     .unwrap_or_else(|| materials.add(material));
 
-                PbrBundle {
-                    mesh,
-                    material: material_handle,
-                    ..Default::default()
-                }
+                (
+                    Mesh3d(mesh),
+                    MeshMaterial3d(material_handle),
+                    Transform::default(),
+                )
             };
 
             if let Some(target) = render_target.target {
                 if existing_entities.get(target).is_ok() {
-                    let old_transform = old_transform.get(target).unwrap();
-                    bundle.transform = *old_transform;
-                    commands.entity(target).insert(bundle);
+                    #[cfg(feature = "dim3")]
+                    {
+                        let old_transform = old_transform.get(target).unwrap();
+                        commands.entity(target).insert((
+                            Mesh3d(bundle.0 .0.clone()),
+                            MeshMaterial3d(bundle.1 .0.clone()),
+                            *old_transform,
+                        ));
+                    }
+                    #[cfg(feature = "dim2")]
+                    {
+                        let old_transform = old_transform.get(target).unwrap();
+                        commands.entity(target).insert((
+                            Mesh2d(bundle.0 .0.clone()),
+                            MeshMaterial2d(bundle.1 .0.clone()),
+                            *old_transform,
+                        ));
+                    }
                 }
             } else {
                 commands.entity(entity).with_children(|cmd| {
@@ -136,35 +150,33 @@ pub fn create_collider_renders_system(
 
 #[cfg(feature = "dim3")]
 fn generate_collision_shape_render_mesh(
-    collider: &Collider,
+    collider: &crate::physics::rapier::prelude::Collider,
     meshes: &mut Assets<Mesh>,
     instances: &mut CollisionShapeMeshInstances,
 ) -> Option<Handle<Mesh>> {
     const NSUB: u32 = 20;
 
-    let ((vertices, indices), flat_normals) = match collider.as_unscaled_typed_shape() {
-        ColliderView::Cuboid(s) => {
+    let ((vertices, indices), flat_normals) = match collider.shape().as_typed_shape() {
+        TypedShape::Cuboid(s) => {
             if let Some((_, mesh)) = instances
                 .cuboid_to_mesh
                 .iter()
-                .find(|(cuboid, _)| cuboid == s.raw)
+                .find(|(cuboid, _)| cuboid.half_extents == s.half_extents)
             {
                 return Some(mesh.clone());
             }
 
-            let (vertices, indices) = s.raw.to_trimesh();
+            let (vertices, indices) = s.to_trimesh();
             let mesh = gen_bevy_mesh(&vertices, &indices, true);
             let handle = meshes.add(mesh);
             instances
                 .cuboid_to_mesh
-                .push((s.raw.clone(), handle.clone()));
+                .push((s.clone(), handle.clone()));
             return Some(handle);
-
-            // (s.raw.to_trimesh(), true)
         }
-        ColliderView::Ball(s) => (s.raw.to_trimesh(NSUB, NSUB / 2), false),
-        ColliderView::Cylinder(s) => {
-            let (mut vtx, mut idx) = s.raw.to_trimesh(NSUB);
+        TypedShape::Ball(s) => (s.to_trimesh(NSUB, NSUB / 2), false),
+        TypedShape::Cylinder(s) => {
+            let (mut vtx, mut idx) = s.to_trimesh(NSUB);
             // Duplicate the basis of the cylinder, to get nice normals.
             let base_id = vtx.len() as u32;
 
@@ -180,8 +192,8 @@ fn generate_collision_shape_render_mesh(
 
             ((vtx, idx), false)
         }
-        ColliderView::Cone(s) => {
-            let (mut vtx, mut idx) = s.raw.to_trimesh(NSUB);
+        TypedShape::Cone(s) => {
+            let (mut vtx, mut idx) = s.to_trimesh(NSUB);
             // Duplicate the basis of the cone, to get nice normals.
             let base_id = vtx.len() as u32;
 
@@ -197,30 +209,26 @@ fn generate_collision_shape_render_mesh(
 
             ((vtx, idx), false)
         }
-        ColliderView::Capsule(s) => (s.raw.to_trimesh(NSUB, NSUB / 2), false),
-        ColliderView::ConvexPolyhedron(s) => (s.raw.to_trimesh(), true),
-        // ColliderView::Compound(s) => s.raw.to_trimesh(),
-        ColliderView::HeightField(s) => (s.raw.to_trimesh(), true),
-        // ColliderView::Polyline(s) => s.raw.to_trimesh(),
-        // ColliderView::Triangle(s) => s.raw.to_trimesh(),
-        ColliderView::HalfSpace(s) => {
-            let normal = s.normal();
+        TypedShape::Capsule(s) => (s.to_trimesh(NSUB, NSUB / 2), false),
+        TypedShape::ConvexPolyhedron(s) => (s.to_trimesh(), true),
+        TypedShape::HeightField(s) => (s.to_trimesh(), true),
+        TypedShape::HalfSpace(s) => {
+            let normal: Vec3 = s.normal.into();
             let extent = 100.0;
-            let rot = UnitQuaternion::rotation_between(&Vector::y(), &normal.into())
-                .unwrap_or(UnitQuaternion::identity());
+            let rot = Quat::from_rotation_arc(Vec3::Y, normal);
             let vertices = [
-                rot * point![extent, 0.0, extent],
-                rot * point![extent, 0.0, -extent],
-                rot * point![-extent, 0.0, -extent],
-                rot * point![-extent, 0.0, extent],
+                rot * Vec3::new(extent, 0.0, extent),
+                rot * Vec3::new(extent, 0.0, -extent),
+                rot * Vec3::new(-extent, 0.0, -extent),
+                rot * Vec3::new(-extent, 0.0, extent),
             ];
-            let indices = [[0, 1, 2], [0, 2, 3]];
+            let indices = [[0u32, 1, 2], [0, 2, 3]];
             ((vertices.to_vec(), indices.to_vec()), true)
         }
-        ColliderView::TriMesh(s) => ((s.raw.vertices().to_vec(), s.indices().to_vec()), true),
+        TypedShape::TriMesh(s) => ((s.vertices().to_vec(), s.indices().to_vec()), true),
         #[cfg(feature = "voxels")]
-        ColliderView::Voxels(s) => (s.raw.to_trimesh(), true),
-        _ => todo!(),
+        TypedShape::Voxels(s) => (s.to_trimesh(), true),
+        _ => return None,
     };
 
     let mesh = gen_bevy_mesh(&vertices, &indices, flat_normals);
@@ -229,23 +237,19 @@ fn generate_collision_shape_render_mesh(
 
 #[cfg(feature = "dim2")]
 fn generate_collision_shape_render_mesh(
-    collider: &Collider,
+    collider: &crate::physics::rapier::prelude::Collider,
     meshes: &mut Assets<Mesh>,
     _unused: &mut CollisionShapeMeshInstances,
 ) -> Option<Handle<Mesh>> {
     const NSUB: u32 = 20;
 
-    let (vertices, indices) = match collider.as_unscaled_typed_shape() {
-        ColliderView::Cuboid(s) => (s.raw.to_polyline(), None),
-        ColliderView::Ball(s) => (s.raw.to_polyline(NSUB), None),
-        ColliderView::Capsule(s) => (s.raw.to_polyline(NSUB), None),
-        // ColliderView::ConvexPolygon(s) => (s.raw.to_polyline(), None),
-        // ColliderView::Compound(s) => s.raw.to_polyline(),
-        ColliderView::HeightField(s) => return None, // (s.raw.to_polyline(), None),
-        // ColliderView::Polyline(s) => s.raw.to_polyline(),
-        // ColliderView::Triangle(s) => s.raw.to_polyline(),
-        ColliderView::TriMesh(s) => (s.raw.vertices().to_vec(), Some(s.indices().to_vec())),
-        _ => todo!(),
+    let (vertices, indices) = match collider.shape().as_typed_shape() {
+        TypedShape::Cuboid(s) => (s.to_polyline(), None),
+        TypedShape::Ball(s) => (s.to_polyline(NSUB), None),
+        TypedShape::Capsule(s) => (s.to_polyline(NSUB), None),
+        TypedShape::HeightField(_s) => return None,
+        TypedShape::TriMesh(s) => (s.vertices().to_vec(), Some(s.indices().to_vec())),
+        _ => return None,
     };
 
     let mesh = gen_bevy_mesh(&vertices, indices);
@@ -253,9 +257,9 @@ fn generate_collision_shape_render_mesh(
 }
 
 #[cfg(feature = "dim2")]
-fn gen_bevy_mesh(vertices: &[Point<Real>], mut indices: Option<Vec<[u32; 3]>>) -> Mesh {
+fn gen_bevy_mesh(vertices: &[Vec2], mut indices: Option<Vec<[u32; 3]>>) -> Mesh {
     let mut mesh = Mesh::new(
-        bevy::render::render_resource::PrimitiveTopology::TriangleList,
+        bevy::mesh::PrimitiveTopology::TriangleList,
         Default::default(),
     );
     mesh.insert_attribute(
@@ -300,9 +304,9 @@ fn gen_bevy_mesh(vertices: &[Point<Real>], mut indices: Option<Vec<[u32; 3]>>) -
 }
 
 #[cfg(feature = "dim3")]
-fn gen_bevy_mesh(vertices: &[Point<Real>], indices: &[[u32; 3]], flat_normals: bool) -> Mesh {
+fn gen_bevy_mesh(vertices: &[Vec3], indices: &[[u32; 3]], flat_normals: bool) -> Mesh {
     let mut mesh = Mesh::new(
-        bevy::render::render_resource::PrimitiveTopology::TriangleList,
+        bevy::mesh::PrimitiveTopology::TriangleList,
         Default::default(),
     );
     mesh.insert_attribute(
@@ -323,10 +327,10 @@ fn gen_bevy_mesh(vertices: &[Point<Real>], indices: &[[u32; 3]], flat_normals: b
         for triangle in indices.iter() {
             let ab = vertices[triangle[1] as usize] - vertices[triangle[0] as usize];
             let ac = vertices[triangle[2] as usize] - vertices[triangle[0] as usize];
-            let normal = ab.cross(&ac);
+            let normal = ab.cross(ac);
             // Contribute this normal to each vertex in the triangle.
             for i in 0..3 {
-                normals[triangle[i] as usize] += Vec3::new(normal.x, normal.y, normal.z);
+                normals[triangle[i] as usize] += normal;
             }
         }
 

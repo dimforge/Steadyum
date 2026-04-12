@@ -6,7 +6,6 @@ use bevy::input::mouse::MouseMotion;
 use bevy::input::mouse::MouseScrollUnit::{Line, Pixel};
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
-use bevy::render::camera::Camera;
 use std::ops::RangeInclusive;
 
 const LINE_TO_PIXEL_RATIO: f32 = 0.001;
@@ -59,7 +58,7 @@ impl OrbitCameraPlugin {
 
     fn mouse_motion_system(
         time: Res<Time>,
-        mut mouse_motion_events: EventReader<MouseMotion>,
+        mut mouse_motion_events: MessageReader<MouseMotion>,
         mouse_button_input: Res<ButtonInput<MouseButton>>,
         mut query: Query<(&mut OrbitCamera, &mut Transform, &mut Camera)>,
     ) {
@@ -73,8 +72,8 @@ impl OrbitCameraPlugin {
             }
 
             if mouse_button_input.pressed(camera.rotate_button) {
-                camera.x -= delta.x * camera.rotate_sensitivity * time.delta_seconds();
-                camera.y -= delta.y * camera.rotate_sensitivity * time.delta_seconds();
+                camera.x -= delta.x * camera.rotate_sensitivity * time.delta_secs();
+                camera.y -= delta.y * camera.rotate_sensitivity * time.delta_secs();
                 camera.y = camera
                     .y
                     .max(*camera.pitch_range.start())
@@ -86,14 +85,14 @@ impl OrbitCameraPlugin {
                 let up_dir = transform.rotation * Vec3::Y;
                 let pan_vector = (delta.x * right_dir + delta.y * up_dir)
                     * camera.pan_sensitivity
-                    * time.delta_seconds();
+                    * time.delta_secs();
                 camera.center += pan_vector;
             }
         }
     }
 
     fn zoom_system(
-        mut mouse_wheel_events: EventReader<MouseWheel>,
+        mut mouse_wheel_events: MessageReader<MouseWheel>,
         mut query: Query<&mut OrbitCamera, With<Camera>>,
     ) {
         let mut total = 0.0;

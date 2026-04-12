@@ -3,16 +3,17 @@ use crate::ui::{ActiveMouseAction, SelectedTool, UiState};
 use bevy::prelude::*;
 
 use crate::drag::DragState;
-#[cfg(feature = "dim3")]
-use {
-    crate::selection::SelectableSceneObject,
-    bevy_rapier::dynamics::{ImpulseJoint, RigidBody, SpringJointBuilder},
+use crate::physics::{
+    PhysicsState, RbHandle, RigidBodyBuilder, SpringJointBuilder,
 };
+#[cfg(feature = "dim3")]
+use crate::selection::SelectableSceneObject;
 
 pub fn handle_drag_click(
     mut commands: Commands,
     mut drag_state: ResMut<DragState>,
     mut mouse_action: ResMut<ActiveMouseAction>,
+    mut physics: ResMut<PhysicsState>,
     ui_state: Res<UiState>,
     scene_mouse: Res<SceneMouse>,
     mouse: Res<ButtonInput<MouseButton>>,
@@ -39,33 +40,48 @@ pub fn handle_drag_click(
             #[cfg(feature = "dim3")]
             {
                 if let Some(SelectableSceneObject::Collider(entity, inter)) = scene_mouse.hovered {
+                    let (ray_pos, ray_dir) = scene_mouse.ray.unwrap();
+                    let hit_point = ray_pos + ray_dir * inter.time_of_impact;
                     let transform = transforms.get(entity).unwrap();
-                    drag_state.drag_plane_normal = -scene_mouse.ray.unwrap().1;
-                    drag_state.drag_plane_point = inter.point;
+                    drag_state.drag_plane_normal = -ray_dir;
+                    drag_state.drag_plane_point = hit_point;
                     // TODO: should be in the local-space of the parent.
                     drag_state.drag_local_point =
-                        transform.rotation.inverse() * (inter.point - transform.translation);
+                        transform.rotation.inverse() * (hit_point - transform.translation);
                     drag_state.dragged_entity = Some(entity);
 
-                    if let Some(entity) = drag_state.mouse_body {
-                        // Despawn the previous body if there was one, this will
-                        // also delete the attached joint.
-                        commands.entity(entity).despawn();
-                    }
+                    // Clean up any previous drag body/joint.
+                    cleanup_drag(&mut commands, &mut drag_state, &mut physics);
 
-                    // Spawn a dummy rigid-body, and attach the joint.
-                    let entity = commands
-                        .spawn(RigidBody::KinematicPositionBased)
-                        .insert(Transform::from_translation(inter.point))
-                        .insert(GlobalTransform::default())
-                        .insert(ImpulseJoint::new(
-                            entity,
-                            // TODO: adjust based on the rigid-body.
-                            SpringJointBuilder::new(0.0, 100.0, 100.0)
-                                .local_anchor1(drag_state.drag_local_point),
-                        ))
-                        .id();
-                    drag_state.mouse_body = Some(entity);
+                    // Find the body handle of the dragged entity.
+                    let dragged_body_handle = physics.body_handle(entity);
+
+                    if let Some(dragged_body_handle) = dragged_body_handle {
+                        // Spawn a temporary kinematic rigid body at the click point.
+                        let mouse_entity = commands.spawn(Transform::from_translation(hit_point)).id();
+
+                        let mouse_body_handle = physics.insert_body(
+                            mouse_entity,
+                            RigidBodyBuilder::kinematic_position_based()
+                                .translation(hit_point),
+                        );
+                        commands.entity(mouse_entity).insert(RbHandle(mouse_body_handle));
+
+                        // Create a spring joint between the dragged body and the mouse body.
+                        let spring_joint = SpringJointBuilder::new(0.0, 100.0, 100.0)
+                            .local_anchor1(drag_state.drag_local_point)
+                            .build();
+
+                        let joint_handle = physics.impulse_joints.insert(
+                            dragged_body_handle,
+                            mouse_body_handle,
+                            spring_joint,
+                            true,
+                        );
+
+                        drag_state.mouse_body = Some(mouse_entity);
+                        drag_state.spring_joint = Some(joint_handle);
+                    }
                 }
             }
         }
@@ -80,11 +96,25 @@ pub fn handle_drag_click(
             *mouse_action = ActiveMouseAction::None;
         }
 
-        if let Some(entity) = drag_state.mouse_body {
-            commands.entity(entity).despawn();
-        }
-
-        drag_state.dragged_entity = None;
-        drag_state.mouse_body = None;
+        cleanup_drag(&mut commands, &mut drag_state, &mut physics);
     }
+}
+
+fn cleanup_drag(
+    commands: &mut Commands,
+    drag_state: &mut DragState,
+    physics: &mut PhysicsState,
+) {
+    // Remove the spring joint from physics.
+    if let Some(joint_handle) = drag_state.spring_joint.take() {
+        physics.impulse_joints.remove(joint_handle, true);
+    }
+
+    // Remove the temporary kinematic body from physics and despawn the entity.
+    if let Some(entity) = drag_state.mouse_body.take() {
+        physics.remove_entity(entity);
+        commands.entity(entity).despawn();
+    }
+
+    drag_state.dragged_entity = None;
 }

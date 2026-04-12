@@ -22,6 +22,7 @@ pub struct UiState {
     pub single_step: bool,
     pub running: bool,
     pub interpolation: bool,
+    pub fonts_loaded: bool,
 }
 
 impl Default for UiState {
@@ -36,6 +37,7 @@ impl Default for UiState {
             single_step: false,
             running: false,
             interpolation: true,
+            fonts_loaded: false,
         }
     }
 }

@@ -1,8 +1,7 @@
 use crate::selection::SelectionState;
 use bevy::prelude::*;
-use bevy_egui::EguiContexts;
+use bevy_egui::input::EguiWantsInput;
 
-pub fn focus_ui(mut ui_context: EguiContexts, mut selection: ResMut<SelectionState>) {
-    let other_inputs_enabled = !ui_context.ctx_mut().wants_pointer_input();
-    selection.inputs_enabled = other_inputs_enabled;
+pub fn focus_ui(egui_wants_input: Res<EguiWantsInput>, mut selection: ResMut<SelectionState>) {
+    selection.inputs_enabled = !egui_wants_input.wants_any_pointer_input();
 }

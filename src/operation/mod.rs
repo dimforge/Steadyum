@@ -1,4 +1,6 @@
 pub use self::operations::{Operation, Operations};
+#[cfg(feature = "dim3")]
+pub use self::operations::ComputedColliderShape;
 pub use self::plugin::RapierOperationsPlugin;
 
 pub use self::add_collision_shape::add_collision_shape;

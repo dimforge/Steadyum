@@ -5,7 +5,7 @@ use bevy::input::mouse::MouseMotion;
 use bevy::input::mouse::MouseScrollUnit::{Line, Pixel};
 use bevy::input::mouse::MouseWheel;
 use bevy::prelude::*;
-use bevy::render::camera::Camera;
+use bevy::prelude::Camera;
 
 const LINE_TO_PIXEL_RATIO: f32 = 0.1;
 
@@ -46,7 +46,7 @@ impl OrbitCameraPlugin {
 
     fn mouse_motion_system(
         _time: Res<Time>,
-        mut mouse_motion_events: EventReader<MouseMotion>,
+        mut mouse_motion_events: MessageReader<MouseMotion>,
         mouse_button_input: Res<ButtonInput<MouseButton>>,
         mut query: Query<(&mut OrbitCamera, &mut Transform, &mut Camera)>,
     ) {
@@ -67,7 +67,7 @@ impl OrbitCameraPlugin {
     }
 
     fn zoom_system(
-        mut mouse_wheel_events: EventReader<MouseWheel>,
+        mut mouse_wheel_events: MessageReader<MouseWheel>,
         mut query: Query<&mut OrbitCamera, With<Camera>>,
     ) {
         let mut total = 0.0;

@@ -2,28 +2,26 @@ use crate::insertion::{InsertionPreview, InsertionState, InsertionStep};
 use crate::selection::SceneMouse;
 use crate::ui::ActiveMouseAction;
 use bevy::prelude::*;
-use bevy_polyline::material::PolylineMaterial;
-use bevy_rapier::prelude::{QueryFilter, RapierContext};
+use crate::physics::{PhysicsState, QueryFilter};
 
 use crate::styling::Theme;
 #[cfg(feature = "dim3")]
-use bevy_rapier::parry::query::details;
+use crate::physics::parry::query::details;
 
 #[cfg(feature = "dim2")]
 pub fn update_preview_scale(
     mut commands: Commands,
     mut insertion_state: ResMut<InsertionState>,
     mut mouse_action: ResMut<ActiveMouseAction>,
-    physics: Res<RapierContext>,
+    physics: Res<PhysicsState>,
     theme: Res<Theme>,
     scene_mouse: Res<SceneMouse>,
     mouse: Res<ButtonInput<MouseButton>>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    mut materials: ResMut<Assets<PolylineMaterial>>,
     preview: Query<(Entity, &InsertionPreview)>,
 ) {
     use bevy::math::Vec3Swizzles;
-    let (preview_entity, _) = preview.get_single().unwrap();
+    let (preview_entity, _) = preview.single().unwrap();
 
     if let Some(point) = scene_mouse.point {
         match insertion_state.step {
@@ -60,22 +58,22 @@ pub fn update_preview_scale(
     mut commands: Commands,
     mut insertion_state: ResMut<InsertionState>,
     mut mouse_action: ResMut<ActiveMouseAction>,
-    physics: Res<RapierContext>,
+    physics: Res<PhysicsState>,
     theme: Res<Theme>,
     scene_mouse: Res<SceneMouse>,
-    mut materials: ResMut<Assets<PolylineMaterial>>,
-    preview: Query<(Entity, &InsertionPreview, &Handle<PolylineMaterial>)>,
+    mut gizmos: Gizmos,
+    preview: Query<(Entity, &InsertionPreview)>,
 ) {
-    let (preview_entity, _, mat_handle) = preview.get_single().unwrap();
+    let (preview_entity, _) = preview.single().unwrap();
 
     if let Some((ray_orig, ray_dir)) = scene_mouse.ray {
         match insertion_state.step {
             Some(InsertionStep::Basis) => {
                 if let Some(hit) = details::line_toi_with_halfspace(
-                    &insertion_state.start_point.into(),
-                    &insertion_state.normal().into(),
-                    &ray_orig.into(),
-                    &ray_dir.into(),
+                    insertion_state.start_point,
+                    insertion_state.normal(),
+                    ray_orig,
+                    ray_dir,
                 ) {
                     if (insertion_state.start_point - insertion_state.end_point).length()
                         >= crate::insertion::ACTIVE_EPS
@@ -93,10 +91,10 @@ pub fn update_preview_scale(
             }
             Some(InsertionStep::Height) => {
                 let (height, _) = details::closest_points_line_line_parameters(
-                    &insertion_state.end_point.into(),
-                    &insertion_state.normal().into(),
-                    &ray_orig.into(),
-                    &ray_dir.into(),
+                    insertion_state.end_point,
+                    insertion_state.normal(),
+                    ray_orig,
+                    ray_dir,
                 );
                 insertion_state.height = height;
 
@@ -107,26 +105,49 @@ pub fn update_preview_scale(
             _ => {}
         }
 
-        // Color the preview in red if it intersects another shapes.
+        // Check intersection with environment to color the preview.
         let transform = insertion_state.transform();
         let shift = insertion_state.normal() * 1.0e-3;
-        if let Some(preview_shape) = &mut insertion_state.preview_shape {
-            preview_shape.set_scale(transform.scale, 10);
-            let inter = physics.intersection_with_shape(
-                // We slightly offset the shape so it doesn’t intersect
-                // with the flat plane it lies on.
-                transform.translation + shift,
-                transform.rotation,
-                preview_shape,
+        let preview_shape_clone = insertion_state.preview_shape.clone();
+        if let Some(preview_shape) = &preview_shape_clone {
+            // Scale the preview shape to match the visible preview size.
+            let scaled_preview = preview_shape.scale_dyn(transform.scale, 20);
+
+            let query_pipeline = physics.broad_phase.as_query_pipeline(
+                physics.narrow_phase.query_dispatcher(),
+                &physics.bodies,
+                &physics.colliders,
                 QueryFilter::default(),
             );
 
-            if inter.is_some() {
+            use crate::physics::rapier::math::Pose;
+            let pose = Pose::from_parts(transform.translation + shift, transform.rotation);
+            let shape_ref: &dyn crate::physics::parry::shape::Shape = scaled_preview
+                .as_deref()
+                .unwrap_or_else(|| &**preview_shape);
+            let mut inter = query_pipeline.intersect_shape(pose, shape_ref);
+
+            if inter.next().is_some() {
                 insertion_state.intersects_environment = true;
-                // materials.get_mut(mat_handle).unwrap().color = Color::RED;
             } else {
                 insertion_state.intersects_environment = false;
-                // materials.get_mut(mat_handle).unwrap().color = theme.insertion_preview_color();
+            }
+        }
+
+        // Draw wireframe preview using gizmos.
+        if insertion_state.step.is_some() {
+            let transform = insertion_state.transform();
+            let polyline = crate::styling::cuboid_polyline();
+            let color = if insertion_state.intersects_environment {
+                Color::srgb(1.0, 0.0, 0.0)
+            } else {
+                theme.insertion_preview_color()
+            };
+
+            for pair in polyline.vertices.windows(2) {
+                let a = transform.transform_point(pair[0]);
+                let b = transform.transform_point(pair[1]);
+                gizmos.line(a, b, color);
             }
         }
     }

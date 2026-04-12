@@ -1,7 +1,6 @@
-use crate::parry::bounding_volume::Aabb;
+use crate::physics::parry::bounding_volume::Aabb;
 use bevy::prelude::*;
 use clap::Parser;
-use nalgebra::point;
 
 #[derive(Parser, Debug, Copy, Clone, Resource)]
 #[command(author, version, about, long_about = None)]
@@ -27,15 +26,15 @@ pub struct CliArgs {
 impl CliArgs {
     #[cfg(feature = "dim2")]
     pub fn simulation_bounds(&self) -> Aabb {
-        let mins = point![self.xmin, self.ymin];
-        let maxs = point![self.xmax, self.ymax];
+        let mins = Vec2::new(self.xmin, self.ymin);
+        let maxs = Vec2::new(self.xmax, self.ymax);
         Aabb::new(mins, maxs)
     }
 
     #[cfg(feature = "dim3")]
     pub fn simulation_bounds(&self) -> Aabb {
-        let mins = point![self.xmin, self.ymin, self.zmin];
-        let maxs = point![self.xmax, self.ymax, self.zmax];
+        let mins = Vec3::new(self.xmin, self.ymin, self.zmin);
+        let maxs = Vec3::new(self.xmax, self.ymax, self.zmax);
         Aabb::new(mins, maxs)
     }
 

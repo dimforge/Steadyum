@@ -1,10 +1,20 @@
 use bevy::prelude::*;
 
+use crate::physics::PhysicsState;
 use crate::utils::{ColliderBundle, RigidBodyBundle};
-#[cfg(feature = "dim3")]
-use bevy_rapier::geometry::ComputedColliderShape;
-use bevy_rapier::plugin::RapierContext;
 use std::path::PathBuf;
+
+/// Describes the shape computation strategy for imported meshes.
+#[cfg(feature = "dim3")]
+#[derive(Clone, Debug)]
+pub enum ComputedColliderShape {
+    /// Use the mesh as a triangle mesh collider.
+    TriMesh,
+    /// Compute a convex hull from the mesh vertices.
+    ConvexHull,
+    /// Compute a convex decomposition from the mesh.
+    ConvexDecomposition,
+}
 
 pub enum Operation {
     #[cfg(feature = "dim3")]
@@ -13,7 +23,7 @@ pub enum Operation {
     AddCollider(ColliderBundle, RigidBodyBundle, Transform),
     AddIntersection,
     ExportScene(PathBuf),
-    ImportScene(RapierContext),
+    ImportScene(PhysicsState),
     ClearScene,
 }
 

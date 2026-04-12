@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_rapier::parry::shape::Capsule;
+use crate::physics::parry::shape::Capsule;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Arrow {
@@ -23,17 +23,16 @@ impl Default for Arrow {
 impl From<Arrow> for Mesh {
     #[cfg(feature = "dim2")]
     fn from(arrow: Arrow) -> Self {
-        use na::point;
         let hl = arrow.length / 2.0;
 
         let vertices = vec![
-            point![arrow.radius, -hl],
-            point![arrow.radius, hl],
-            point![arrow.head_radius, hl],
-            point![0.0, hl + arrow.head_length],
-            point![-arrow.head_radius, hl],
-            point![-arrow.radius, hl],
-            point![-arrow.radius, -hl],
+            Vec2::new(arrow.radius, -hl),
+            Vec2::new(arrow.radius, hl),
+            Vec2::new(arrow.head_radius, hl),
+            Vec2::new(0.0, hl + arrow.head_length),
+            Vec2::new(-arrow.head_radius, hl),
+            Vec2::new(-arrow.radius, hl),
+            Vec2::new(-arrow.radius, -hl),
         ];
         let indices = vec![[0u32, 1, 6], [6, 1, 5], [2, 3, 4]];
         crate::utils::bevy_mesh_from_trimesh_elements(&vertices, Some(indices))
@@ -41,7 +40,7 @@ impl From<Arrow> for Mesh {
 
     #[cfg(feature = "dim3")]
     fn from(arrow: Arrow) -> Self {
-        use bevy_rapier::parry::shape::Cone;
+        use crate::physics::parry::shape::Cone;
 
         let mut arrow_capsule = Capsule::new_y(arrow.length / 2.0, arrow.radius).to_trimesh(10, 10);
         let mut arrow_cone = Cone::new(arrow.head_length / 2.0, arrow.head_radius).to_trimesh(10);

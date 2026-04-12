@@ -1,15 +1,14 @@
 use crate::selection::{SceneMouse, SelectableSceneObject, SelectionShape};
+use crate::physics::{PhysicsState, QueryFilter, Ray};
 
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
-use bevy_rapier::prelude::*;
 
 #[cfg(feature = "dim2")]
 pub fn update_hovered_entity(
     mut scene_mouse: ResMut<SceneMouse>,
     keyboard: Res<ButtonInput<KeyCode>>,
-    physics: Res<RapierContext>,
-    windows: Query<&Window, With<PrimaryWindow>>,
+    physics: Res<PhysicsState>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     camera: Query<(&GlobalTransform, &Camera), With<crate::MainCamera>>,
     gizmo_shapes: Query<(Entity, &GlobalTransform, &SelectionShape)>,
     visibility: Query<&ViewVisibility>,
@@ -31,19 +30,24 @@ pub fn update_hovered_entity(
             if visibility.get(entity).map(|v| v.get()).unwrap_or(false) {
                 let shape_shift = Transform {
                     translation: Vec3::new(sel_shape.translation.x, sel_shape.translation.y, 0.0),
-                    rotation: Quat::from_rotation_z(sel_shape.rotation),
+                    rotation: Quat::from_rotation_z(sel_shape.rotation.angle()),
                     ..Default::default()
                 };
                 let total_transform = transform.mul_transform(shape_shift).compute_transform();
-                let mut scaled_shape = sel_shape.shape.clone();
-                scaled_shape.set_scale(total_transform.scale.xy(), 10);
 
-                if scaled_shape.contains_point(
-                    total_transform.translation.xy(),
-                    total_transform.rotation.to_axis_angle().1,
-                    point,
-                ) {
-                    gizmo_hit = Some(entity);
+                let pos = total_transform.translation.xy();
+                let (axis, angle) = total_transform.rotation.to_axis_angle();
+                let rot = if axis.z < 0.0 { -angle } else { angle };
+                let scale = total_transform.scale.xy();
+                let scaled_shape = sel_shape.shape.scale_dyn(scale.into(), 10);
+
+                if let Some(scaled) = scaled_shape {
+                    if scaled.contains_point(
+                        &crate::physics::rapier::math::Pose::new(pos.into(), rot),
+                        point.into(),
+                    ) {
+                        gizmo_hit = Some(entity);
+                    }
                 }
             }
         }
@@ -55,29 +59,43 @@ pub fn update_hovered_entity(
         }
 
         // If not, check if we are hovering a scene object.
-        let mut topmost_id = 0;
-        physics.intersections_with_point(
-            point,
-            QueryFilter::default()
-                .predicate(&|entity| visibility.get(entity).map(|vis| vis.get()).unwrap_or(false)),
-            |entity| {
-                // NOTE: the entities with the largest ids are rendered on top of the ones
-                //       with smaller ids (because of the way the bevy_rapier debug renderer works).
-                //       So we should always select the one with the largest id.
-                if entity.index() >= topmost_id {
-                    scene_mouse.hovered = Some(SelectableSceneObject::Collider(entity, point));
-                    topmost_id = entity.index();
-                }
-                true
-            },
+        // Build filter that only accepts visible colliders.
+        let filter = QueryFilter {
+            predicate: Some(&|col_handle, _collider| {
+                physics
+                    .collider_entity(col_handle)
+                    .map(|entity| visibility.get(entity).map(|vis| vis.get()).unwrap_or(false))
+                    .unwrap_or(false)
+            }),
+            ..Default::default()
+        };
+        let qp = physics.broad_phase.as_query_pipeline(
+            physics.narrow_phase.query_dispatcher(),
+            &physics.bodies,
+            &physics.colliders,
+            filter,
         );
+
+        let mut topmost_id: u32 = 0;
+        for (col_handle, _collider) in qp.intersect_point(point.into()) {
+            if let Some(entity) = physics.collider_entity(col_handle) {
+                // NOTE: the entities with the largest ids are rendered on top of the ones
+                //       with smaller ids (because of the way the debug renderer works).
+                //       So we should always select the one with the largest id.
+                let eid = entity.index().index();
+                if eid >= topmost_id {
+                    scene_mouse.hovered = Some(SelectableSceneObject::Collider(entity, point));
+                    topmost_id = eid;
+                }
+            }
+        }
     }
 }
 
 #[cfg(feature = "dim3")]
 pub fn update_hovered_entity(
     mut scene_mouse: ResMut<SceneMouse>,
-    physics: Res<RapierContext>,
+    physics: Res<PhysicsState>,
     gizmo_shapes: Query<(Entity, &GlobalTransform, &SelectionShape)>,
     visibility: Query<&ViewVisibility>,
 ) {
@@ -98,25 +116,25 @@ pub fn update_hovered_entity(
                     ..Default::default()
                 };
                 let total_transform = transform.mul_transform(shape_shift).compute_transform();
-                let mut scaled_shape = sel_shape.shape.clone();
-                scaled_shape.set_scale(total_transform.scale, 10);
+                let scale = total_transform.scale;
+                let scaled_shape = sel_shape.shape.scale_dyn(scale.into(), 10);
 
-                if let Some(toi) = scaled_shape.cast_ray(
-                    total_transform.translation,
-                    total_transform.rotation,
-                    ray_start,
-                    ray_dir,
-                    f32::MAX,
-                    false,
-                ) {
-                    if toi != f32::MAX {
-                        if let Some((best_toi, best_gizmo)) = &mut gizmo_hit {
-                            if toi < *best_toi {
-                                *best_toi = toi;
-                                *best_gizmo = entity;
+                if let Some(scaled) = scaled_shape {
+                    let pose = crate::physics::rapier::math::Pose::from_parts(
+                        total_transform.translation,
+                        total_transform.rotation,
+                    );
+                    let ray = Ray::new(ray_start.into(), ray_dir.into());
+                    if let Some(toi) = scaled.cast_ray(&pose, &ray, f32::MAX, false) {
+                        if toi != f32::MAX {
+                            if let Some((best_toi, best_gizmo)) = &mut gizmo_hit {
+                                if toi < *best_toi {
+                                    *best_toi = toi;
+                                    *best_gizmo = entity;
+                                }
+                            } else {
+                                gizmo_hit = Some((toi, entity));
                             }
-                        } else {
-                            gizmo_hit = Some((toi, entity));
                         }
                     }
                 }
@@ -130,16 +148,29 @@ pub fn update_hovered_entity(
         }
 
         // If not, check if we are hovering a scene object.
-        scene_mouse.hovered = physics
-            .cast_ray_and_get_normal(
-                ray_start,
-                ray_dir,
-                f32::MAX,
-                false,
-                QueryFilter::default().predicate(&|entity| {
-                    visibility.get(entity).map(|vis| vis.get()).unwrap_or(false)
-                }),
-            )
-            .map(|(entity, inter)| SelectableSceneObject::Collider(entity, inter));
+        // Build filter that only accepts visible colliders.
+        let filter = QueryFilter {
+            predicate: Some(&|col_handle, _collider| {
+                physics
+                    .collider_entity(col_handle)
+                    .map(|entity| visibility.get(entity).map(|vis| vis.get()).unwrap_or(false))
+                    .unwrap_or(false)
+            }),
+            ..Default::default()
+        };
+        let qp = physics.broad_phase.as_query_pipeline(
+            physics.narrow_phase.query_dispatcher(),
+            &physics.bodies,
+            &physics.colliders,
+            filter,
+        );
+
+        let ray = Ray::new(ray_start, ray_dir);
+        let result = qp.cast_ray_and_get_normal(&ray, f32::MAX, true);
+        scene_mouse.hovered = result.and_then(|(col_handle, inter)| {
+            physics
+                .collider_entity(col_handle)
+                .map(|entity| SelectableSceneObject::Collider(entity, inter))
+        });
     }
 }

@@ -1,6 +1,6 @@
 use crate::MainCamera;
-use bevy::transform::TransformSystem;
-use bevy::{prelude::*, render::camera::Camera};
+use bevy::transform::TransformSystems;
+use bevy::prelude::*;
 
 use super::{GizmoSettings, TransformGizmoSystem};
 
@@ -11,7 +11,7 @@ impl Plugin for Ui3dNormalization {
             PostUpdate,
             normalize
                 .in_set(TransformGizmoSystem::NormalizeSet)
-                .after(TransformSystem::TransformPropagate)
+                .after(TransformSystems::Propagate)
                 .after(TransformGizmoSystem::Place)
                 .run_if(|settings: Res<GizmoSettings>| settings.enabled),
         );
@@ -47,10 +47,10 @@ pub fn normalize(
         // TODO: can be improved by manually specifying the active camera to normalize against. The
         // majority of cases will only use a single camera for this viewer, so this is sufficient.
         let p0 = query.p0();
-        let (camera_position, camera) = p0.get_single().expect("Not exactly one camera");
+        let (camera_position, camera) = p0.single().expect("Not exactly one camera");
         let camera_position = camera_position.to_owned();
         let camera = camera.to_owned();
-        let view = camera_position.compute_matrix().inverse();
+        let view = camera_position.to_matrix().inverse();
 
         for (mut transform, mut global_transform, normalize) in query.p1().iter_mut() {
             let decomposed_global_transform = global_transform.compute_transform();
@@ -58,7 +58,7 @@ pub fn normalize(
                 .transform_point3(decomposed_global_transform.translation)
                 .z;
 
-            let pixel_end = if let Some(coords) = camera.world_to_viewport(
+            let pixel_end = if let Ok(coords) = camera.world_to_viewport(
                 &GlobalTransform::default(),
                 Vec3::new(
                     normalize.size_in_world * decomposed_global_transform.scale.x,
@@ -71,7 +71,7 @@ pub fn normalize(
                 continue;
             };
 
-            let pixel_root = if let Some(coords) =
+            let pixel_root = if let Ok(coords) =
                 camera.world_to_viewport(&GlobalTransform::default(), Vec3::new(0.0, 0.0, distance))
             {
                 coords

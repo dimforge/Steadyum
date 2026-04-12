@@ -1,16 +1,13 @@
 use crate::builtin_scenes::BuiltinScene;
-use bevy_rapier::prelude::RapierContext;
-use bevy_rapier::rapier::dynamics::RigidBodyHandle;
-use bevy_rapier::rapier::prelude::*;
-use na::Vector3;
-use std::collections::HashMap;
+use crate::physics::PhysicsState;
+use crate::physics::rapier::prelude::*;
 
 fn create_wall(
     bodies: &mut RigidBodySet,
     colliders: &mut ColliderSet,
-    offset: Vector<f32>,
+    offset: Vector,
     stack_height: usize,
-    half_extents: Vector<f32>,
+    half_extents: Vector,
 ) {
     let shift = half_extents * 2.0;
     for i in 0usize..stack_height {
@@ -23,7 +20,7 @@ fn create_wall(
                 - stack_height as f32 * half_extents.z;
 
             // Build the rigid body.
-            let rigid_body = RigidBodyBuilder::dynamic().translation(vector![x, y, z]);
+            let rigid_body = RigidBodyBuilder::dynamic().translation(Vec3::new(x, y, z));
             let handle = bodies.insert(rigid_body);
             let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y, half_extents.z);
             // let collider = ColliderBuilder::ball(half_extents.y);
@@ -34,14 +31,14 @@ fn create_wall(
 
 const GROUND_SIZE: f32 = 300.0;
 
-fn init_platform_with_walls(result: &mut RapierContext, platform_shift: Vector3<f32>) {
+fn init_platform_with_walls(result: &mut PhysicsState, platform_shift: Vec3) {
     /*
      * Ground
      */
     let ground_height = 5.0;
 
     let rigid_body = RigidBodyBuilder::kinematic_position_based()
-        .translation(platform_shift + Vector3::y() * (-ground_height + 25.0));
+        .translation(platform_shift + Vec3::Y * (-ground_height + 25.0));
     let ground_handle = result.bodies.insert(rigid_body);
     let n = 10;
 
@@ -65,9 +62,9 @@ fn init_platform_with_walls(result: &mut RapierContext, platform_shift: Vector3<
             create_wall(
                 &mut result.bodies,
                 &mut result.colliders,
-                platform_shift + vector![x, shift_y, z],
+                platform_shift + Vec3::new(x, shift_y, z),
                 num_basis,
-                vector![1.0, 0.5, 1.0],
+                Vec3::new(1.0, 0.5, 1.0),
             );
         }
     }
@@ -77,19 +74,19 @@ pub fn init_world() -> BuiltinScene {
     /*
      * World
      */
-    let mut result = RapierContext::default();
+    let mut result = PhysicsState::default();
 
     let num = 3; // 9; // 3
     for i in 0..num {
         for j in 0..num {
-            let shift = vector![
+            let shift = Vec3::new(
                 GROUND_SIZE * 2.0 * std::f32::consts::SQRT_2 * (i as f32 - (num / 2) as f32),
                 0.0,
-                GROUND_SIZE * 2.0 * std::f32::consts::SQRT_2 * (j as f32 - (num / 2) as f32)
-            ];
+                GROUND_SIZE * 2.0 * std::f32::consts::SQRT_2 * (j as f32 - (num / 2) as f32),
+            );
             init_platform_with_walls(&mut result, shift);
         }
     }
 
-    BuiltinScene { context: result }
+    BuiltinScene { state: result }
 }

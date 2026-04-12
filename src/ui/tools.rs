@@ -1,27 +1,24 @@
 use super::{ButtonTexture, SelectedTool, UiState};
 use crate::operation::{Operation, Operations};
+use crate::physics::PhysicsState;
 use bevy::window::Window;
 use bevy_egui::{egui, EguiContexts};
-
-use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
 
 #[cfg(feature = "voxels")]
 use {
     crate::utils::{ColliderBundle, RigidBodyBundle},
     bevy::prelude::Transform,
-    bevy_rapier::geometry::Collider,
-    bevy_rapier::math::Vect,
+    crate::physics::{Collider, Vect},
 };
 
 #[cfg(feature = "dim3")]
-use bevy_rapier::geometry::ComputedColliderShape;
+use crate::operation::ComputedColliderShape;
 
 pub(super) fn ui(
     window: &Window,
     ui_context: &mut EguiContexts,
     ui_state: &mut UiState,
-    _physics_context: &mut RapierContext,
-    _physics_config: &mut RapierConfiguration,
+    _physics: &mut PhysicsState,
     operations: &mut Operations,
 ) {
     let set_style = |ui: &mut egui::Ui| {
@@ -40,7 +37,7 @@ pub(super) fn ui(
         .resizable(false)
         .title_bar(false)
         .fixed_pos(pos)
-        .show(ui_context.ctx_mut(), |ui| {
+        .show(ui_context.ctx_mut().expect("EguiContext"), |ui| {
             set_style(ui);
 
             ui.horizontal(|ui| {
@@ -83,7 +80,7 @@ pub(super) fn ui(
         .resizable(false)
         .title_bar(false)
         .fixed_pos(pos)
-        .show(ui_context.ctx_mut(), |ui| {
+        .show(ui_context.ctx_mut().expect("EguiContext"), |ui| {
             set_style(ui);
 
             ui.horizontal(|ui| {
@@ -133,10 +130,10 @@ pub(super) fn ui(
                     .add(egui::Button::new(ButtonTexture::ImportMesh.rich_text()))
                     .clicked()
                 {
-                    if let Ok(Some(path)) = native_dialog::FileDialog::new()
+                    if let Ok(Some(path)) = native_dialog::FileDialogBuilder::default()
                         .add_filter("STL Mesh", &["stl"])
                         .add_filter("OBJ Mesh", &["obj"])
-                        .show_open_single_file()
+                        .open_single_file().show()
                     {
                         operations.push(Operation::ImportMesh(path, ComputedColliderShape::TriMesh))
                     }
@@ -147,10 +144,10 @@ pub(super) fn ui(
                     .add(egui::Button::new(ButtonTexture::ImportVoxels.rich_text()))
                     .clicked()
                 {
-                    if let Ok(Some(path)) = native_dialog::FileDialog::new()
+                    if let Ok(Some(path)) = native_dialog::FileDialogBuilder::default()
                         .add_filter("MagicaVoxel", &["vox"])
                         .add_filter("Mesh", &["stl", "obj"])
-                        .show_open_single_file()
+                        .open_single_file().show()
                     {
                         if path.extension().map(|ext| ext == "vox") == Some(true) {
                             match dot_vox::load(path.as_path().to_str().unwrap()) {
@@ -202,7 +199,7 @@ pub(super) fn ui(
         .resizable(false)
         .title_bar(false)
         .fixed_pos(pos)
-        .show(ui_context.ctx_mut(), |ui| {
+        .show(ui_context.ctx_mut().expect("EguiContext"), |ui| {
             set_style(ui);
 
             ui.horizontal(|ui| {

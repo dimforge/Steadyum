@@ -2,11 +2,9 @@ use crate::operation::{Operation, Operations};
 use crate::selection::SceneMouse;
 use crate::ui::{ActiveMouseAction, SelectedTool, UiState};
 use bevy::prelude::*;
-use bevy_rapier::dynamics::{Ccd, Velocity};
 
 use crate::utils::{ColliderBundle, RigidBodyBundle};
-use bevy_rapier::geometry::ColliderMassProperties;
-use bevy_rapier::prelude::Collider;
+use crate::physics::{ColliderBuilder, Vect};
 
 pub fn handle_projectile_click(
     mut mouse_action: ResMut<ActiveMouseAction>,
@@ -32,16 +30,17 @@ pub fn handle_projectile_click(
         if mouse.just_released(MouseButton::Left) {
             #[cfg(feature = "dim3")] // TODO: adapt for 2D
             if let Some((ray_pos, ray_dir)) = scene_mouse.ray {
+                let mut rb = RigidBodyBundle::dynamic();
+                rb.linvel = ray_dir * 400.0;
+                rb.ccd_enabled = true;
+
+                let cb = ColliderBundle::new(
+                    ColliderBuilder::ball(0.3).density(1000.0).build(),
+                );
+
                 operations.push(Operation::AddCollider(
-                    ColliderBundle {
-                        mass_properties: ColliderMassProperties::Density(1000.0),
-                        ..ColliderBundle::new(Collider::ball(0.3))
-                    },
-                    RigidBodyBundle {
-                        velocity: Velocity::linear(ray_dir * 400.0),
-                        ccd: Ccd::enabled(),
-                        ..RigidBodyBundle::dynamic()
-                    },
+                    cb,
+                    rb,
                     Transform::from_translation(ray_pos),
                 ));
             }

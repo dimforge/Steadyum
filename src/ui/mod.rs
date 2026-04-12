@@ -1,5 +1,6 @@
+use crate::control::{CharacterController, CharacterControlOptions};
+use crate::physics::{ColHandle, PhysicsState, RbHandle};
 use crate::selection::Selection;
-use crate::utils::{ColliderComponentsMut, RigidBodyComponentsMut};
 use bevy::app::AppExit;
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
@@ -7,21 +8,19 @@ use bevy_egui::{
     egui::{self, Color32, FontData, FontDefinitions, FontFamily, RichText},
     EguiContexts,
 };
-use bevy_rapier::control::KinematicCharacterController;
-use bevy_rapier::plugin::{RapierConfiguration, RapierContext};
-use bevy_rapier::render::DebugRenderContext;
 use strum_macros::EnumIter;
 use ui_state::OpenObjectTab;
 
 pub use self::plugin::RapierUiPlugin;
 use crate::cli::CliArgs;
-use crate::control::CharacterControlOptions;
 use crate::operation::Operations;
 use crate::styling::Theme;
 pub(self) use gizmo::add_missing_gizmos;
 pub(self) use input_blocking::focus_ui;
 pub(self) use keyboard::handle_keyboard_inputs;
 pub use ui_state::{ActiveMouseAction, SelectedTool, UiState};
+
+pub(crate) use debug_render::DebugRenderState;
 
 mod debug_render;
 mod gizmo;
@@ -140,22 +139,18 @@ impl ButtonTexture {
     }
 }
 
-pub fn load_assets(
-    mut ui_context: EguiContexts,
-    _ui_state: ResMut<UiState>,
-    _assets: Res<AssetServer>,
-) {
-    let mut fonts = FontDefinitions::default();
+fn load_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
     fonts.font_data.insert(
         "blender-icons".to_owned(),
-        FontData::from_static(include_bytes!("../../assets/blender-icons.ttf")),
+        std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../../assets/blender-icons.ttf"))),
     );
     fonts
         .families
-        .get_mut(&FontFamily::Monospace)
-        .unwrap()
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
         .push("blender-icons".to_owned());
-    ui_context.ctx_mut().set_fonts(fonts);
+    ctx.set_fonts(fonts);
 }
 
 pub fn update_ui(
@@ -163,31 +158,46 @@ pub fn update_ui(
     (cli, mut theme): (Res<CliArgs>, ResMut<Theme>),
     mut ui_context: EguiContexts,
     mut ui_state: ResMut<UiState>,
-    mut debug_render_context: ResMut<DebugRenderContext>,
-    mut physics_context: ResMut<RapierContext>,
-    mut physics_config: ResMut<RapierConfiguration>,
+    mut debug_render_state: ResMut<DebugRenderState>,
+    mut physics: ResMut<PhysicsState>,
     mut operations: ResMut<Operations>,
-    exit: EventWriter<AppExit>,
+    exit: MessageWriter<AppExit>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    mut bodies: Query<RigidBodyComponentsMut>,
-    mut colliders: Query<ColliderComponentsMut>,
+    mut rb_query: Query<(Entity, &RbHandle)>,
+    mut col_query: Query<(Entity, &ColHandle)>,
     mut character_controllers: Query<(
-        &mut KinematicCharacterController,
+        &mut CharacterController,
         &mut CharacterControlOptions,
     )>,
     mut selections: Query<(Entity, &mut Selection)>,
     mut visibility: Query<(Entity, &mut Visibility)>,
     mut transforms: Query<(Entity, &mut Transform)>,
+    mut init_frames: Local<u32>,
 ) {
-    if let Ok(window) = windows.get_single() {
+    // Skip early frames until egui context is fully initialized.
+    // Frame 0-1: egui context not ready yet.
+    // Frame 2: load custom fonts, skip UI this frame to let egui process them.
+    // Frame 3+: normal operation.
+    if *init_frames < 2 {
+        *init_frames += 1;
+        return;
+    }
+    if *init_frames == 2 {
+        if let Ok(ctx) = ui_context.ctx_mut() {
+            load_fonts(ctx);
+        }
+        *init_frames = 3;
+        return; // Skip this frame to let egui process the new fonts.
+    }
+
+    if let Ok(window) = windows.single() {
         main_menu::ui(
             window,
             &mut theme,
             &mut ui_context,
             &mut ui_state,
-            &mut *physics_context,
-            &mut *physics_config,
-            &mut *debug_render_context,
+            &mut *physics,
+            &mut *debug_render_state,
             &mut *operations,
             exit,
         );
@@ -196,34 +206,30 @@ pub fn update_ui(
             &cli,
             &mut ui_context,
             &mut ui_state,
-            &mut *physics_context,
-            &mut *physics_config,
+            &mut *physics,
         );
         popup_menu::ui(
             window,
             &mut ui_context,
-            &mut *physics_context,
-            &mut *physics_config,
+            &mut *physics,
         );
         tools::ui(
             window,
             &mut ui_context,
             &mut ui_state,
-            &mut *physics_context,
-            &mut *physics_config,
+            &mut *physics,
             &mut *operations,
         );
-        simulation_infos::ui(&mut ui_context, &mut ui_state, &*physics_context);
+        simulation_infos::ui(&mut ui_context, &mut ui_state, &*physics);
         right_panel::ui(
             &mut commands,
             window,
             &cli,
             &mut ui_context,
             &mut ui_state,
-            &mut *physics_context,
-            &mut *physics_config,
-            &mut bodies,
-            &mut colliders,
+            &mut *physics,
+            &mut rb_query,
+            &mut col_query,
             &mut character_controllers,
             &mut selections,
             &mut visibility,

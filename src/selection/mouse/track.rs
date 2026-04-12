@@ -9,14 +9,14 @@ pub fn track_mouse_state(
     windows: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
-    if let Ok(window) = windows.get_single() {
+    if let Ok(window) = windows.single() {
         for (camera_transform, camera) in camera.iter() {
             if let Some(cursor) = window.cursor_position() {
                 let ndc_cursor = ((cursor / Vec2::new(window.width(), window.height()) * 2.0)
                     - Vec2::ONE)
                     * Vec2::new(1.0, -1.0);
                 let ndc_to_world =
-                    camera_transform.compute_matrix() * camera.clip_from_view().inverse();
+                    camera_transform.to_matrix() * camera.clip_from_view().inverse();
                 let ray_pt1 =
                     ndc_to_world.project_point3(Vec3::new(ndc_cursor.x, ndc_cursor.y, -1.0));
 
@@ -29,7 +29,7 @@ pub fn track_mouse_state(
                 {
                     let ray_pt2 =
                         ndc_to_world.project_point3(Vec3::new(ndc_cursor.x, ndc_cursor.y, 1.0));
-                    let ray_dir = ray_pt2 - ray_pt1;
+                    let ray_dir = (ray_pt2 - ray_pt1).normalize();
                     scene_mouse.ray = Some((ray_pt1, ray_dir));
                 }
             }

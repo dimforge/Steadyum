@@ -1,24 +1,21 @@
 use bevy::prelude::*;
-use bevy_rapier::{
-    geometry::Collider,
-    math::{Rot, Vect},
-};
+use crate::physics::{SharedShape, Vect, Rotation};
 
 #[derive(Clone, Component)]
 pub struct SelectionShape {
     pub translation: Vect,
-    pub rotation: Rot,
-    pub shape: Collider,
+    pub rotation: Rotation,
+    pub shape: SharedShape,
 }
 
 impl SelectionShape {
-    pub fn new(shape: Collider) -> Self {
+    pub fn new(shape: SharedShape) -> Self {
         Self {
             translation: Vect::ZERO,
             #[cfg(feature = "dim2")]
-            rotation: 0.0,
+            rotation: Rotation::IDENTITY,
             #[cfg(feature = "dim3")]
-            rotation: Rot::IDENTITY,
+            rotation: Rotation::IDENTITY,
             shape,
         }
     }

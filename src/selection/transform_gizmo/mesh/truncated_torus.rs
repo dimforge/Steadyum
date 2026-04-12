@@ -1,6 +1,7 @@
 use bevy::{
     prelude::*,
-    render::{mesh::Indices, render_resource::PrimitiveTopology},
+    mesh::Indices,
+    render::render_resource::PrimitiveTopology,
 };
 /// A torus (donut) shape.
 #[derive(Debug, Clone, Copy)]
@@ -27,8 +28,6 @@ impl Default for TruncatedTorus {
 #[cfg(feature = "dim2")]
 impl From<TruncatedTorus> for Mesh {
     fn from(torus: TruncatedTorus) -> Self {
-        use na::point;
-
         let r1 = torus.radius - torus.ring_radius;
         let r2 = torus.radius + torus.ring_radius;
         let mut vertices = vec![];
@@ -37,12 +36,12 @@ impl From<TruncatedTorus> for Mesh {
 
         for i in 0..torus.subdivisions_segments {
             let (s, c) = ((i as f32) * dtheta).sin_cos();
-            vertices.push(point![c * r1, s * r1]);
+            vertices.push(Vec2::new(c * r1, s * r1));
         }
 
         for i in 0..torus.subdivisions_segments {
             let (s, c) = ((i as f32) * dtheta).sin_cos();
-            vertices.push(point![c * r2, s * r2]);
+            vertices.push(Vec2::new(c * r2, s * r2));
         }
 
         for i in 0..torus.subdivisions_segments - 1 {

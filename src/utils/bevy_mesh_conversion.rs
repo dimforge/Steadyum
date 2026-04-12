@@ -1,26 +1,22 @@
 use bevy::prelude::*;
-use bevy::render::mesh::{Indices, VertexAttributeValues};
-use bevy_rapier::parry::shape::TriMesh;
-use bevy_rapier::rapier::math::{Isometry, Point};
+use bevy::mesh::{Indices, VertexAttributeValues};
+use crate::physics::parry::shape::TriMesh;
+use crate::physics::Pose;
+use crate::physics::pose_to_transform;
 
 pub fn bevy_pbr_bundle_from_trimesh(
     meshes: &mut Assets<Mesh>,
     trimesh: &TriMesh,
-    position: Isometry<f32>,
-) -> PbrBundle {
+    position: Pose,
+) -> (Mesh3d, Transform) {
     let mesh = bevy_mesh_from_trimesh(&trimesh);
-    let tra = bevy_rapier::utils::iso_to_transform(&position);
+    let tra = pose_to_transform(&position);
     let scaled_tra = Transform {
         translation: tra.translation,
         rotation: tra.rotation,
         scale: Vec3::splat(1.00001),
     };
-    PbrBundle {
-        mesh: meshes.add(mesh),
-        transform: scaled_tra,
-        global_transform: GlobalTransform::from(scaled_tra),
-        ..Default::default()
-    }
+    (Mesh3d(meshes.add(mesh)), scaled_tra)
 }
 
 #[cfg(feature = "dim3")]
@@ -29,7 +25,7 @@ pub fn bevy_mesh_from_trimesh(trimesh: &TriMesh) -> Mesh {
 }
 
 #[cfg(feature = "dim3")]
-pub fn bevy_mesh_from_trimesh_elements(vertices: &[Point<f32>], indices: &[[u32; 3]]) -> Mesh {
+pub fn bevy_mesh_from_trimesh_elements(vertices: &[Vec3], indices: &[[u32; 3]]) -> Mesh {
     let mut mesh = Mesh::new(
         bevy::render::render_resource::PrimitiveTopology::TriangleList,
         Default::default(),
@@ -50,7 +46,7 @@ pub fn bevy_mesh_from_trimesh_elements(vertices: &[Point<f32>], indices: &[[u32;
     for triangle in indices.iter() {
         let ab = vertices[triangle[1] as usize] - vertices[triangle[0] as usize];
         let ac = vertices[triangle[2] as usize] - vertices[triangle[0] as usize];
-        let normal = ab.cross(&ac);
+        let normal = ab.cross(ac);
         // Contribute this normal to each vertex in the triangle.
         for i in 0..3 {
             normals[triangle[i] as usize] += Vec3::new(normal.x, normal.y, normal.z);
@@ -93,7 +89,7 @@ pub fn bevy_mesh_from_trimesh(trimesh: &TriMesh) -> Mesh {
 
 #[cfg(feature = "dim2")]
 pub fn bevy_mesh_from_trimesh_elements(
-    vertices: &[Point<f32>],
+    vertices: &[Vec2],
     mut indices: Option<Vec<[u32; 3]>>,
 ) -> Mesh {
     let mut mesh = Mesh::new(

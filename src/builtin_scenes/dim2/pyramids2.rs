@@ -1,14 +1,14 @@
 use crate::builtin_scenes::BuiltinScene;
-use bevy_rapier::prelude::RapierContext;
-use bevy_rapier2d::rapier::prelude::*;
+use crate::physics::PhysicsState;
+use crate::physics::rapier::prelude::*;
 use std::collections::HashMap;
 
 fn create_wall(
     bodies: &mut RigidBodySet,
     colliders: &mut ColliderSet,
-    offset: Vector<f32>,
+    offset: Vector,
     stack_height: usize,
-    half_extents: Vector<f32>,
+    half_extents: Vector,
 ) {
     let shift = half_extents * 2.0;
     for i in 0usize..stack_height {
@@ -20,7 +20,7 @@ fn create_wall(
             let y = fi * shift.y + offset.y;
 
             // Build the rigid body.
-            let rigid_body = RigidBodyBuilder::dynamic().translation(vector![x, y]);
+            let rigid_body = RigidBodyBuilder::dynamic().translation(Vec2::new(x, y));
             let handle = bodies.insert(rigid_body);
             let collider = ColliderBuilder::cuboid(half_extents.x, half_extents.y);
             // let collider = ColliderBuilder::ball(half_extents.y);
@@ -33,7 +33,7 @@ pub fn init_world() -> BuiltinScene {
     /*
      * World
      */
-    let mut result = RapierContext::default();
+    let mut result = PhysicsState::default();
 
     /*
      * Create the pyramids.
@@ -50,13 +50,13 @@ pub fn init_world() -> BuiltinScene {
             create_wall(
                 &mut result.bodies,
                 &mut result.colliders,
-                vector![x, y + 4.0],
+                Vec2::new(x, y + 4.0),
                 num_basis,
-                vector![0.5, 0.5],
+                Vec2::new(0.5, 0.5),
             );
 
             let rigid_body =
-                RigidBodyBuilder::kinematic_position_based().translation(vector![x, y]);
+                RigidBodyBuilder::kinematic_position_based().translation(Vec2::new(x, y));
             let ground_handle = result.bodies.insert(rigid_body);
             let collider = ColliderBuilder::cuboid(8.0, 0.5);
             result
@@ -65,5 +65,5 @@ pub fn init_world() -> BuiltinScene {
         }
     }
 
-    BuiltinScene { context: result }
+    BuiltinScene { state: result }
 }
